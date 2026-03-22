@@ -4,9 +4,13 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Global prefix: /api/v1
+  app.setGlobalPrefix('api/v1');
 
   // Security
   app.use(helmet());
@@ -15,8 +19,29 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Global prefix: /api/v1
-  app.setGlobalPrefix('api/v1');
+  // Swagger Configuration
+  const config = new DocumentBuilder()
+    .setTitle('MealMind API')
+    .setDescription('Personalized Meal Suggestion API for Vietnamese families')
+    .setVersion('1.0')
+    .addTag('auth', 'Authentication and Authorization')
+    .addTag('users', 'User Profiles and Multi-family Management')
+    .addTag('recipes', 'Recipe Management and Search')
+    .addTag('suggestions', 'AI-powered Meal Suggestions')
+    .addTag('planning', 'Weekly Meal Planning')
+    .addTag('nutrition', 'Nutrition Tracking and Goals')
+    .addBearerAuth()
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    customSiteTitle: 'MealMind API Documentation',
+    swaggerOptions: {
+      persistAuthorization: true,
+      filter: true,
+      displayRequestDuration: true,
+    },
+  });
 
   // Global pipes
   app.useGlobalPipes(

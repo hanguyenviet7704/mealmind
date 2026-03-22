@@ -2,7 +2,10 @@ import { Controller, Post, Get, Body, Query, UseGuards, HttpCode, HttpStatus } f
 import { InteractionsService } from './interactions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('recipes')
+@ApiBearerAuth()
 @Controller('interactions')
 @UseGuards(JwtAuthGuard)
 export class InteractionsController {

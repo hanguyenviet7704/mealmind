@@ -2,7 +2,10 @@ import { Controller, Get, Put, Param, Query, Body, UseGuards } from '@nestjs/com
 import { DietaryService } from './dietary.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('users')
+@ApiBearerAuth()
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class DietaryController {

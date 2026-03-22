@@ -2,7 +2,10 @@ import { Controller, Post, Get, Patch, Body, Param, UseGuards, HttpCode, HttpSta
 import { OnboardingService } from './onboarding.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('users')
+@ApiBearerAuth()
 @Controller('onboarding')
 @UseGuards(JwtAuthGuard)
 export class OnboardingController {

@@ -2,7 +2,10 @@ import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
 import { OnboardingService } from './onboarding.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 
+@ApiTags('users')
+@ApiBearerAuth()
 @Controller('taste-profiles')
 @UseGuards(JwtAuthGuard)
 export class TasteProfilesController {
