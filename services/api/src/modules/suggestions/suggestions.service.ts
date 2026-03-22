@@ -99,7 +99,7 @@ export class SuggestionsService {
     let whereClause: any = {
       id: { notIn: excludeIds },
       isPublished: true,
-      mealTypes: { array_contains: mealType },
+      mealTypes: { array_contains: [mealType] },
     };
 
     if (role === 'soup') whereClause.name = { contains: 'canh' };
@@ -192,7 +192,7 @@ export class SuggestionsService {
     const recipes = await this.prisma.recipe.findMany({
       where: {
         isPublished: true,
-        ...(mealType && { mealTypes: { array_contains: mealType } }),
+        ...(mealType && { mealTypes: { array_contains: [mealType] } }),
         ...(excludeIds.length > 0 && { id: { notIn: excludeIds } }),
       },
       orderBy: { popularityScore: 'desc' },

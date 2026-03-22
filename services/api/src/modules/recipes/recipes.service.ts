@@ -30,7 +30,7 @@ export class RecipesService {
       ...(cuisine && { cuisine: cuisine as any }),
       ...(difficulty && { difficulty: difficulty as any }),
       ...(maxCookTime && { cookTime: { lte: maxCookTime } }),
-      ...(mealType && { mealTypes: { array_contains: mealType } }),
+      ...(mealType && { mealTypes: { array_contains: [mealType] } }),
     };
 
     const orderBy = this.buildOrderBy(sortBy, sortOrder);
@@ -171,7 +171,7 @@ export class RecipesService {
       recipe: {
         isPublished: true,
         ...(cuisine && { cuisine: cuisine as any }),
-        ...(mealType && { mealTypes: { array_contains: mealType } }),
+        ...(mealType && { mealTypes: { array_contains: [mealType] } }),
         ...(q && {
           OR: [
             { name: { contains: q, mode: 'insensitive' as any } },

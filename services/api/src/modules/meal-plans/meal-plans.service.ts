@@ -238,7 +238,7 @@ export class MealPlansService {
       where: {
         isPublished: true,
         id: { notIn: excludeIds },
-        mealTypes: { array_contains: slot.mealType },
+        mealTypes: { array_contains: [slot.mealType] },
       },
       orderBy: { popularityScore: 'desc' },
       take: 5,
@@ -265,7 +265,7 @@ export class MealPlansService {
         where: {
           isPublished: true,
           id: { notIn: lockedRecipeIds },
-          mealTypes: { array_contains: slot.mealType },
+          mealTypes: { array_contains: [slot.mealType] },
         },
         orderBy: { popularityScore: 'desc' },
         skip: Math.floor(Math.random() * 10), // Add randomness
@@ -367,7 +367,7 @@ export class MealPlansService {
         const recipe = await this.prisma.recipe.findFirst({
           where: {
             isPublished: true,
-            mealTypes: { array_contains: mealType },
+            mealTypes: { array_contains: [mealType] },
             id: { notIn: usedIds },
           },
           orderBy: { popularityScore: 'desc' },
