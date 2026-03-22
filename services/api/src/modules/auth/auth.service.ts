@@ -4,14 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { RedisService } from '@/common/redis/redis.service';
 import {
   InvalidCredentialsException,
   EmailExistsException,
   RefreshTokenExpiredException,
   RefreshTokenRevokedException,
   ResetTokenInvalidException,
-  AccountLockedException,
   OAuthFailedException,
   PasswordMismatchException,
   OAuthOnlyAccountException,
@@ -40,7 +38,6 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
-    private redis: RedisService,
   ) {
     this.ACCESS_TTL = parseInt(this.config.get('JWT_ACCESS_EXPIRES_IN', '900'));
     this.REFRESH_TTL = parseInt(this.config.get('JWT_REFRESH_EXPIRES_IN', '604800'));
@@ -57,7 +54,6 @@ export class AuthService {
       data: { name, email, passwordHash },
     });
 
-    // Auto-login after register
     const tokens = await this.generateTokens(user.id, user.email, user.subscriptionTier, user.activeProfileId);
 
     return {
@@ -69,25 +65,13 @@ export class AuthService {
 
   // ---- AUTH-003: Login ----
   async login(email: string, password: string, rememberMe: boolean = false) {
-    // Check rate limit
-    await this.checkLoginRateLimit(email);
-
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.passwordHash) {
-      await this.incrementLoginAttempts(email);
-      throw new InvalidCredentialsException();
-    }
+    if (!user || !user.passwordHash) throw new InvalidCredentialsException();
 
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      await this.incrementLoginAttempts(email);
-      throw new InvalidCredentialsException();
-    }
+    if (!valid) throw new InvalidCredentialsException();
 
-    // Reset login attempts on success
-    await this.redis.del(`login_attempts:${email}`);
-
-    const refreshTtl = rememberMe ? 30 * 24 * 3600 : this.REFRESH_TTL; // 30 days vs 7 days
+    const refreshTtl = rememberMe ? 30 * 24 * 3600 : this.REFRESH_TTL;
     const tokens = await this.generateTokens(user.id, user.email, user.subscriptionTier, user.activeProfileId, refreshTtl);
 
     return {
@@ -99,8 +83,6 @@ export class AuthService {
 
   // ---- AUTH-004: Google OAuth ----
   async googleAuth(idToken: string) {
-    // In production: verify idToken with Google APIs
-    // For now: decode and trust (placeholder)
     const payload = this.decodeGoogleToken(idToken);
     if (!payload) throw new OAuthFailedException();
 
@@ -108,16 +90,13 @@ export class AuthService {
     let isNewUser = false;
 
     if (!user) {
-      // Check if email exists (link accounts per BR-AUTH-06)
       user = await this.prisma.user.findUnique({ where: { email: payload.email } });
       if (user) {
-        // Link Google account
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: { googleId: payload.sub, avatarUrl: user.avatarUrl || payload.picture },
         });
       } else {
-        // Create new user
         user = await this.prisma.user.create({
           data: {
             email: payload.email,
@@ -136,7 +115,6 @@ export class AuthService {
 
   // ---- AUTH-005: Apple Sign In ----
   async appleAuth(identityToken: string, _authorizationCode: string, fullName?: { givenName?: string; familyName?: string }, email?: string) {
-    // In production: verify identityToken with Apple
     const appleUserId = this.decodeAppleToken(identityToken);
     if (!appleUserId) throw new OAuthFailedException();
 
@@ -145,7 +123,6 @@ export class AuthService {
 
     if (!user) {
       if (email) {
-        // Check email link (BR-AUTH-06)
         user = await this.prisma.user.findUnique({ where: { email } });
         if (user) {
           user = await this.prisma.user.update({
@@ -187,7 +164,6 @@ export class AuthService {
     if (stored.revokedAt) throw new RefreshTokenRevokedException();
     if (stored.expiresAt < new Date()) throw new RefreshTokenExpiredException();
 
-    // Revoke old token (rotation)
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
@@ -216,45 +192,18 @@ export class AuthService {
     }
   }
 
-  // ---- AUTH-008: Forgot Password ----
+  // ---- AUTH-008: Forgot Password (token logged to console only) ----
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    // Always return success (security: don't reveal if email exists)
     if (!user) return;
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetHash = this.hashToken(resetToken);
-
-    // Store reset token in Redis with 1 hour TTL
-    await this.redis.set(`reset:${resetHash}`, user.id, 3600);
-
-    // TODO: Send email with reset link containing resetToken
-    // For now, log it
     console.log(`[DEV] Password reset token for ${email}: ${resetToken}`);
   }
 
-  // ---- AUTH-009: Reset Password ----
-  async resetPassword(token: string, newPassword: string) {
-    const tokenHash = this.hashToken(token);
-    const userId = await this.redis.get(`reset:${tokenHash}`);
-
-    if (!userId) throw new ResetTokenInvalidException();
-
-    const passwordHash = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash },
-    });
-
-    // Revoke all refresh tokens (force logout everywhere)
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-
-    // Delete reset token
-    await this.redis.del(`reset:${tokenHash}`);
+  // ---- AUTH-009: Reset Password (disabled without Redis) ----
+  async resetPassword(_token: string, _newPassword: string) {
+    throw new ResetTokenInvalidException();
   }
 
   // ---- AUTH-010: Get current user ----
@@ -279,31 +228,27 @@ export class AuthService {
       data: { passwordHash },
     });
 
-    // Revoke all other sessions
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
 
-  // ---- G2: Delete Account (soft delete, 30-day grace) ----
+  // ---- G2: Delete Account ----
   async deleteAccount(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new InvalidCredentialsException();
 
-    // Verify password (if OAuth-only, skip password check)
     if (user.passwordHash) {
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) throw new PasswordMismatchException();
     }
 
-    // Soft delete
     await this.prisma.user.update({
       where: { id: userId },
       data: { deletedAt: new Date() },
     });
 
-    // Revoke all tokens
     await this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -355,23 +300,6 @@ export class AuthService {
     };
   }
 
-  // Rate limiting helpers
-  private async checkLoginRateLimit(email: string) {
-    const key = `login_attempts:${email}`;
-    const attempts = await this.redis.get(key);
-    if (attempts && parseInt(attempts) >= 5) {
-      throw new AccountLockedException();
-    }
-  }
-
-  private async incrementLoginAttempts(email: string) {
-    const key = `login_attempts:${email}`;
-    const current = await this.redis.get(key);
-    const count = current ? parseInt(current) + 1 : 1;
-    await this.redis.set(key, count.toString(), 900); // 15 min TTL
-  }
-
-  // OAuth token decoders (placeholder — use real verification in production)
   private decodeGoogleToken(idToken: string): { sub: string; email: string; name: string; picture: string } | null {
     try {
       const parts = idToken.split('.');

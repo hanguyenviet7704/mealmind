@@ -1,14 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { RedisService } from '@/common/redis/redis.service';
 import {
   ResourceNotFoundException,
-  ResourceForbiddenException,
   MaxProfilesException,
   CannotDeletePrimaryException,
 } from '@/common/exceptions';
-
-// OB-001 through OB-012 — Full Onboarding Service
 
 interface QuizData {
   regions?: string[];
@@ -24,14 +20,9 @@ interface QuizData {
 
 @Injectable()
 export class OnboardingService {
-  constructor(
-    private prisma: PrismaService,
-    private redis: RedisService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  // ---- OB-001: Quiz Submit ----
   async submitQuiz(userId: string, data: QuizData) {
-    // Create primary taste profile from quiz data
     const profile = await this.prisma.tasteProfile.create({
       data: {
         userId,
@@ -47,7 +38,6 @@ export class OnboardingService {
       },
     });
 
-    // Create dietary restriction if allergens provided
     if (data.allergens?.length || data.customAllergens?.length) {
       await this.prisma.dietaryRestriction.create({
         data: {
@@ -59,7 +49,6 @@ export class OnboardingService {
       });
     }
 
-    // Mark onboarding complete
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -68,53 +57,28 @@ export class OnboardingService {
       },
     });
 
-    // Clear quiz progress from Redis
-    await this.redis.del(`quiz_progress:${userId}`);
-
     return profile;
   }
 
-  // ---- OB-001: Get quiz progress ----
-  async getQuizProgress(userId: string) {
-    const progress = await this.redis.getJson<{
-      completedSteps: number[];
-      partialData: Record<string, unknown>;
-    }>(`quiz_progress:${userId}`);
-
+  async getQuizProgress(_userId: string) {
     return {
-      completedSteps: progress?.completedSteps || [],
+      completedSteps: [],
       totalSteps: 5,
-      currentStep: (progress?.completedSteps?.length || 0) + 1,
-      partialData: progress?.partialData || {},
+      currentStep: 1,
+      partialData: {},
     };
   }
 
-  // ---- OB-010: Save quiz step (auto-save) ----
-  async saveQuizStep(userId: string, step: number, data: Record<string, unknown>) {
-    const key = `quiz_progress:${userId}`;
-    const progress = (await this.redis.getJson<{
-      completedSteps: number[];
-      partialData: Record<string, unknown>;
-    }>(key)) || { completedSteps: [], partialData: {} };
-
-    if (!progress.completedSteps.includes(step)) {
-      progress.completedSteps.push(step);
-    }
-    progress.partialData = { ...progress.partialData, ...data };
-
-    await this.redis.setJson(key, progress, 86400); // 24h TTL
-
+  async saveQuizStep(_userId: string, _step: number, _data: Record<string, unknown>) {
     return {
-      completedSteps: progress.completedSteps,
+      completedSteps: [],
       totalSteps: 5,
-      currentStep: Math.min(progress.completedSteps.length + 1, 5),
-      partialData: progress.partialData,
+      currentStep: 1,
+      partialData: {},
     };
   }
 
-  // ---- OB-001: Skip quiz ----
   async skipQuiz(userId: string) {
-    // BR-OB-01: Create default profile with medium tastes
     const profile = await this.prisma.tasteProfile.create({
       data: {
         userId,
@@ -141,7 +105,6 @@ export class OnboardingService {
     return profile;
   }
 
-  // ---- OB-002: Taste Profile CRUD ----
   async getTasteProfiles(userId: string) {
     return this.prisma.tasteProfile.findMany({
       where: { userId },
@@ -180,7 +143,6 @@ export class OnboardingService {
     });
   }
 
-  // ---- OB-004: Family Profiles ----
   async getFamilyProfiles(userId: string) {
     return this.prisma.tasteProfile.findMany({
       where: { userId },
@@ -194,14 +156,12 @@ export class OnboardingService {
     ageRange?: string;
     tasteProfile?: QuizData;
   }) {
-    // Check limit: BR-OB-05
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     const count = await this.prisma.tasteProfile.count({ where: { userId } });
     const maxProfiles = user?.subscriptionTier === 'pro' ? 10 : 6;
 
     if (count >= maxProfiles) throw new MaxProfilesException(maxProfiles);
 
-    // BR-OB-02: Inherit from primary if not provided
     const primary = await this.prisma.tasteProfile.findFirst({
       where: { userId, isPrimary: true },
     });
@@ -225,7 +185,6 @@ export class OnboardingService {
       include: { dietaryRestrictions: true },
     });
 
-    // BR-OB-06: Child auto-filter
     if (data.ageRange === 'child_under_6' || data.ageRange === 'child_6_12') {
       await this.applyChildFilter(userId, profile.id);
     }
@@ -289,7 +248,6 @@ export class OnboardingService {
     };
   }
 
-  // ---- OB-011: Merge preferences (family mode) ----
   async getMergedPreferences(userId: string) {
     const profiles = await this.prisma.tasteProfile.findMany({
       where: { userId },
@@ -299,37 +257,27 @@ export class OnboardingService {
     if (profiles.length === 0) throw new ResourceNotFoundException('Profiles');
     if (profiles.length === 1) return profiles[0];
 
-    // BR-OB-03: Merge
     const allRegions = [...new Set(profiles.flatMap((p: any) => p.regions))];
-
-    // Average taste levels
     const avgSpice = Math.round(profiles.reduce((s: number, p: any) => s + p.spiceLevel, 0) / profiles.length);
     const avgSweet = Math.round(profiles.reduce((s: number, p: any) => s + p.sweetLevel, 0) / profiles.length);
     const avgSalt = Math.round(profiles.reduce((s: number, p: any) => s + p.saltLevel, 0) / profiles.length);
 
-    // Union allergens
     const allAllergens = [...new Set(profiles.flatMap((p: any) =>
       p.dietaryRestrictions.flatMap((dr: any) => dr.allergens),
     ))];
 
-    // Strictest diet type
     const dietPriority: Record<string, number> = {
       vegan: 6, lacto_ovo_vegetarian: 5, paleo: 4, keto: 3, low_carb: 2, normal: 1,
     };
     const strictestDiet = profiles.reduce((strictest: string, p: any) => {
-      return (dietPriority[p.dietType] || 0) > (dietPriority[strictest] || 0)
-        ? p.dietType
-        : strictest;
+      return (dietPriority[p.dietType] || 0) > (dietPriority[strictest] || 0) ? p.dietType : strictest;
     }, 'normal');
 
-    // Min cook time
     const cookTimePriority: Record<string, number> = {
       under_15: 1, fifteen_to_30: 2, thirty_to_60: 3, over_60: 4,
     };
     const minCookTime = profiles.reduce((min: string, p: any) => {
-      return (cookTimePriority[p.maxCookTime] || 99) < (cookTimePriority[min] || 99)
-        ? p.maxCookTime
-        : min;
+      return (cookTimePriority[p.maxCookTime] || 99) < (cookTimePriority[min] || 99) ? p.maxCookTime : min;
     }, profiles[0].maxCookTime);
 
     return {
@@ -348,9 +296,7 @@ export class OnboardingService {
     };
   }
 
-  // ---- OB-012: Child profile auto-filter ----
   private async applyChildFilter(userId: string, profileId: string) {
-    // Auto-create dietary restriction: no spicy (spice=1), no raw, no caffeine
     await this.prisma.tasteProfile.update({
       where: { id: profileId },
       data: { spiceLevel: 1 },
@@ -360,23 +306,17 @@ export class OnboardingService {
       where: { profileId },
     });
 
+    const childItems = ['đồ sống', 'cà phê', 'trà đặc', 'bia', 'rượu'];
+
     if (existing) {
-      // MySQL JSON field — no native push; merge manually
       const current = Array.isArray(existing.customBlacklist) ? existing.customBlacklist as string[] : [];
-      const childItems = ['đồ sống', 'cà phê', 'trà đặc', 'bia', 'rượu'];
       await this.prisma.dietaryRestriction.update({
         where: { id: existing.id },
-        data: {
-          customBlacklist: [...new Set([...current, ...childItems])],
-        },
+        data: { customBlacklist: [...new Set([...current, ...childItems])] },
       });
     } else {
       await this.prisma.dietaryRestriction.create({
-        data: {
-          userId,
-          profileId,
-          customBlacklist: ['đồ sống', 'cà phê', 'trà đặc', 'bia', 'rượu'],
-        },
+        data: { userId, profileId, customBlacklist: childItems },
       });
     }
   }

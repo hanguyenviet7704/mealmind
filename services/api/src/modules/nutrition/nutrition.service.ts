@@ -1,46 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { RedisService } from '@/common/redis/redis.service';
 import { ResourceNotFoundException } from '@/common/exceptions';
 
 @Injectable()
 export class NutritionService {
-  constructor(
-    private prisma: PrismaService,
-    private redis: RedisService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  // NT-001: Get recipe nutrition (calc from ingredients, cache)
+  // NT-001: Get recipe nutrition (calc from ingredients)
   async getRecipeNutrition(recipeId: string, servings?: number) {
-    // Check cache first
-    const cacheKey = `nutrition:${recipeId}`;
-    const cached = await this.redis.getJson<any>(cacheKey);
-
     let nutrition: any;
-    if (cached) {
-      nutrition = cached;
+
+    const existing = await this.prisma.nutritionInfo.findUnique({
+      where: { recipeId },
+    });
+
+    if (existing) {
+      nutrition = {
+        calories: Number(existing.calories),
+        protein: Number(existing.protein),
+        carbs: Number(existing.carbs),
+        fat: Number(existing.fat),
+        fiber: existing.fiber ? Number(existing.fiber) : null,
+        sodium: existing.sodium ? Number(existing.sodium) : null,
+      };
     } else {
-      // Check if we have pre-calculated nutrition
-      const existing = await this.prisma.nutritionInfo.findUnique({
-        where: { recipeId },
-      });
-
-      if (existing) {
-        nutrition = {
-          calories: Number(existing.calories),
-          protein: Number(existing.protein),
-          carbs: Number(existing.carbs),
-          fat: Number(existing.fat),
-          fiber: existing.fiber ? Number(existing.fiber) : null,
-          sodium: existing.sodium ? Number(existing.sodium) : null,
-        };
-      } else {
-        // Calculate from ingredients
-        nutrition = await this.calculateFromIngredients(recipeId);
-      }
-
-      // Cache for 1 hour
-      await this.redis.setJson(cacheKey, nutrition, 3600);
+      nutrition = await this.calculateFromIngredients(recipeId);
     }
 
     const recipe = await this.prisma.recipe.findUnique({

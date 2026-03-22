@@ -1,9 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { RedisService } from '@/common/redis/redis.service';
 import { DietaryService } from '../dietary/dietary.service';
-import { SuggestionLimitException } from '@/common/exceptions';
 
 @Injectable()
 export class SuggestionsService {
@@ -12,28 +10,19 @@ export class SuggestionsService {
 
   constructor(
     private prisma: PrismaService,
-    private redis: RedisService,
     private config: ConfigService,
     private dietaryService: DietaryService,
   ) {
     this.recommendationUrl = this.config.get('RECOMMENDATION_SERVICE_URL', 'http://localhost:8000');
   }
 
-  // MS-005: Get suggestions
   async getSuggestions(userId: string, params: {
     profileId?: string; mealType?: string; count?: number;
   }) {
-    // MS-018: Rate limiting
-    await this.checkSuggestionLimit(userId);
-
-    // Get dietary filters
     const filters = await this.dietaryService.getFilterCriteria(userId, params.profileId);
-
-    // Build context
     const context = await this.buildContext();
 
     try {
-      // Call recommendation service
       const response = await fetch(`${this.recommendationUrl}/recommend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -46,13 +35,11 @@ export class SuggestionsService {
           filters,
           mode: 'standard',
         }),
-        signal: AbortSignal.timeout(10000), // 10s timeout
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) throw new Error(`Recommendation service error: ${response.status}`);
       const data = await response.json();
-
-      // Enrich with recipe data
       return this.enrichSuggestions(data.suggestions, userId);
     } catch (error) {
       this.logger.warn('Recommendation service unavailable, using popularity fallback');
@@ -60,10 +47,7 @@ export class SuggestionsService {
     }
   }
 
-  // MS-013: Surprise suggestions
   async getSurpriseSuggestions(userId: string, profileId?: string) {
-    await this.checkSuggestionLimit(userId);
-
     try {
       const response = await fetch(`${this.recommendationUrl}/recommend`, {
         method: 'POST',
@@ -87,10 +71,7 @@ export class SuggestionsService {
     }
   }
 
-  // MS-014: Combo suggestions
   async getComboSuggestions(userId: string, profileId?: string) {
-    await this.checkSuggestionLimit(userId);
-
     try {
       const response = await fetch(`${this.recommendationUrl}/recommend`, {
         method: 'POST',
@@ -114,7 +95,6 @@ export class SuggestionsService {
     }
   }
 
-  // MS-015: Get swap alternatives for a combo item role
   async swapAlternatives(userId: string, role: string, mealType: string, excludeIds: string[]) {
     let whereClause: any = {
       id: { notIn: excludeIds },
@@ -122,15 +102,10 @@ export class SuggestionsService {
       mealTypes: { array_contains: mealType },
     };
 
-    if (role === 'soup') {
-      whereClause.name = { contains: 'canh' };
-    } else if (role === 'main') {
-      whereClause.calories = { gt: 300 };
-    } else if (role === 'vegetable') {
-      whereClause.name = { contains: 'rau' };
-    } else if (role === 'dessert') {
-      whereClause.name = { contains: 'tráng miệng' };
-    }
+    if (role === 'soup') whereClause.name = { contains: 'canh' };
+    else if (role === 'main') whereClause.calories = { gt: 300 };
+    else if (role === 'vegetable') whereClause.name = { contains: 'rau' };
+    else if (role === 'dessert') whereClause.name = { contains: 'tráng miệng' };
 
     const recipes = await this.prisma.recipe.findMany({
       where: whereClause,
@@ -139,7 +114,6 @@ export class SuggestionsService {
       include: { nutritionInfo: true },
     });
 
-    // If less than 3, fallback without strict filters
     if (recipes.length < 3) {
       const more = await this.prisma.recipe.findMany({
         where: { id: { notIn: [...excludeIds, ...recipes.map(r => r.id)] }, isPublished: true },
@@ -153,26 +127,17 @@ export class SuggestionsService {
     return recipes;
   }
 
-  // MS-016: Refresh suggestions
   async refreshSuggestions(userId: string, excludeIds: string[], params: {
     profileId?: string; mealType?: string; count?: number;
   }) {
-    await this.checkSuggestionLimit(userId);
-    // Same as getSuggestions but exclude seen IDs
     return this.getPopularityFallback(userId, params.mealType, params.count || 5, excludeIds);
   }
 
-  // MS-017: Get current context (debug)
   async getContext() {
     return this.buildContext();
   }
 
-  // MS-019: Weather integration
   async getWeather(lat: number, lon: number) {
-    const cacheKey = `weather:${lat.toFixed(1)}:${lon.toFixed(1)}`;
-    const cached = await this.redis.getJson<any>(cacheKey);
-    if (cached) return cached;
-
     const apiKey = this.config.get('WEATHER_API_KEY');
     if (!apiKey) return null;
 
@@ -182,20 +147,16 @@ export class SuggestionsService {
       if (!response.ok) return null;
 
       const data = await response.json();
-      const weather = {
+      return {
         temperature: data.main.temp,
         condition: this.getWeatherCondition(data.main.temp, data.weather?.[0]?.main),
       };
-
-      await this.redis.setJson(cacheKey, weather, 1800); // 30 min cache
-      return weather;
     } catch {
       this.logger.warn('Weather API unavailable');
       return null;
     }
   }
 
-  // ---- Helpers ----
   private async buildContext() {
     const now = new Date();
     const hour = now.getHours();
@@ -208,13 +169,7 @@ export class SuggestionsService {
     else if (month >= 8 && month <= 10) season = 'autumn';
     else if (month >= 11 || month <= 1) season = 'winter';
 
-    return {
-      dayOfWeek,
-      isWeekend,
-      season,
-      timeOfDay: `${hour}:00`,
-      weather: null, // Would be populated with real lat/lon
-    };
+    return { dayOfWeek, isWeekend, season, timeOfDay: `${hour}:00`, weather: null };
   }
 
   private getCurrentMealType(): string {
@@ -290,18 +245,5 @@ export class SuggestionsService {
         } : null,
       };
     });
-  }
-
-  // MS-018: Rate limiting for Free tier
-  private async checkSuggestionLimit(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (user?.subscriptionTier === 'pro') return;
-
-    const key = `suggestion_count:${userId}:${new Date().toISOString().split('T')[0]}`;
-    const count = await this.redis.get(key);
-    if (count && parseInt(count) >= 50) throw new SuggestionLimitException();
-
-    const newCount = count ? parseInt(count) + 1 : 1;
-    await this.redis.set(key, newCount.toString(), 86400); // 24h TTL
   }
 }

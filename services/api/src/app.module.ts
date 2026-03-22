@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './common/prisma/prisma.module';
-import { RedisModule } from './common/redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
@@ -41,8 +40,6 @@ import { HealthModule } from './modules/health/health.module';
 
     // Infrastructure
     PrismaModule,
-    RedisModule,
-
     // Feature modules
     AuthModule,
     UsersModule,
