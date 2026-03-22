@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "prisma migrate deploy && prisma db seed && node dist/main",
-    "start:prod": "prisma migrate deploy && prisma db seed && node dist/main",
+    "start": "prisma migrate deploy && node dist/main",
+    "start:prod": "prisma migrate deploy && node dist/main",
     "lint": "eslint \"{src,tests}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
