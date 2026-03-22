@@ -15,12 +15,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// Force React and React Native to always resolve from the mobile app's
-// node_modules, preventing duplicate React instances across the monorepo.
-config.resolver.extraNodeModules = {
-  'react': path.resolve(projectRoot, 'node_modules/react'),
-  'react-native': path.resolve(projectRoot, 'node_modules/react-native'),
-  'react-dom': path.resolve(projectRoot, 'node_modules/react-dom'),
-};
+// Prevent Metro from walking up the directory tree to resolve modules.
+// In pnpm monorepos, packages live in .pnpm/ virtual store; without this flag
+// Metro can resolve 'react' from multiple symlink paths (all pointing to the
+// same physical files) and bundle it twice → duplicate React → hook crash.
+config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;
