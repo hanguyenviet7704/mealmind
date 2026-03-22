@@ -19,6 +19,22 @@ interface QuizData {
   familySize?: number;
 }
 
+// Frontend gửi tên gọi phổ thông → cần mapping về enum Prisma
+const DIET_TYPE_MAP: Record<string, string> = {
+  normal: 'normal',
+  vegetarian: 'lacto_ovo_vegetarian',
+  lacto_ovo_vegetarian: 'lacto_ovo_vegetarian',
+  vegan: 'vegan',
+  keto: 'keto',
+  low_carb: 'low_carb',
+  paleo: 'paleo',
+};
+
+function mapDietType(input?: string): string {
+  if (!input) return 'normal';
+  return DIET_TYPE_MAP[input] || 'normal';
+}
+
 @Injectable()
 export class OnboardingService {
   constructor(private prisma: PrismaService) {}
@@ -33,7 +49,7 @@ export class OnboardingService {
         spiceLevel: data.spiceLevel ?? 3,
         sweetLevel: data.sweetLevel ?? 3,
         saltLevel: data.saltLevel ?? 3,
-        dietType: (data.dietType as any) || 'normal',
+        dietType: mapDietType(data.dietType) as any,
         maxCookTime: (data.maxCookTime as any) || 'thirty_to_60',
         familySize: data.familySize ?? 2,
       },
@@ -148,7 +164,7 @@ export class OnboardingService {
         ...(data.spiceLevel !== undefined && { spiceLevel: data.spiceLevel }),
         ...(data.sweetLevel !== undefined && { sweetLevel: data.sweetLevel }),
         ...(data.saltLevel !== undefined && { saltLevel: data.saltLevel }),
-        ...(data.dietType !== undefined && { dietType: data.dietType as any }),
+        ...(data.dietType !== undefined && { dietType: mapDietType(data.dietType) as any }),
         ...(data.maxCookTime !== undefined && { maxCookTime: data.maxCookTime as any }),
         ...(data.familySize !== undefined && { familySize: data.familySize }),
       },
@@ -191,7 +207,7 @@ export class OnboardingService {
         spiceLevel: tp.spiceLevel ?? primary?.spiceLevel ?? 3,
         sweetLevel: tp.sweetLevel ?? primary?.sweetLevel ?? 3,
         saltLevel: tp.saltLevel ?? primary?.saltLevel ?? 3,
-        dietType: (tp.dietType as any) || primary?.dietType || 'normal',
+        dietType: mapDietType(tp.dietType) as any || primary?.dietType || 'normal',
         maxCookTime: (tp.maxCookTime as any) || primary?.maxCookTime || 'thirty_to_60',
         familySize: tp.familySize ?? primary?.familySize ?? 2,
       },
@@ -224,7 +240,7 @@ export class OnboardingService {
         ...(data.tasteProfile?.spiceLevel !== undefined && { spiceLevel: data.tasteProfile.spiceLevel }),
         ...(data.tasteProfile?.sweetLevel !== undefined && { sweetLevel: data.tasteProfile.sweetLevel }),
         ...(data.tasteProfile?.saltLevel !== undefined && { saltLevel: data.tasteProfile.saltLevel }),
-        ...(data.tasteProfile?.dietType !== undefined && { dietType: data.tasteProfile.dietType as any }),
+        ...(data.tasteProfile?.dietType !== undefined && { dietType: mapDietType(data.tasteProfile.dietType) as any }),
         ...(data.tasteProfile?.maxCookTime !== undefined && { maxCookTime: data.tasteProfile.maxCookTime as any }),
         ...(data.tasteProfile?.familySize !== undefined && { familySize: data.tasteProfile.familySize }),
       },
