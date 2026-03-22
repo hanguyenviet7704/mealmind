@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import {
   ResourceNotFoundException,
@@ -77,10 +78,10 @@ export class OnboardingService {
     const completedSteps: number[] = existing?.completedSteps
       ? [...new Set([...(existing.completedSteps as number[]), step])]
       : [step];
-    const partialData: Record<string, unknown> = {
+    const partialData = {
       ...((existing?.partialData as Record<string, unknown>) || {}),
       ...data,
-    };
+    } as Prisma.InputJsonValue;
     await this.prisma.quizProgress.upsert({
       where: { userId },
       create: { userId, completedSteps, partialData },
