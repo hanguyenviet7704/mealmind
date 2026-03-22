@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-const apiInternalUrl = process.env.API_INTERNAL_URL || 'http://localhost:4000';
+const apiInternalUrl =
+  process.env.API_INTERNAL_URL && !process.env.API_INTERNAL_URL.includes('<')
+    ? process.env.API_INTERNAL_URL
+    : process.env.NODE_ENV === 'production'
+      ? 'https://mealmindservice-api-production.up.railway.app'
+      : 'http://localhost:4000';
 
 const nextConfig = {
   reactStrictMode: true,
