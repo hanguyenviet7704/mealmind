@@ -18,4 +18,4 @@ RUN pnpm --filter=@mealmind/service-api build
 EXPOSE 4000
 
 # Run DB migrations then start the server
-CMD ["sh", "-c", "cd /app/services/api && npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "cd /app/services/api && npx prisma migrate deploy && npx prisma db seed && node dist/main"]
