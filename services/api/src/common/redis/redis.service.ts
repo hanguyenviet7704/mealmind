@@ -7,13 +7,20 @@ export class RedisService implements OnModuleDestroy {
   private readonly client: Redis;
 
   constructor(private configService: ConfigService) {
-    this.client = new Redis({
-      host: this.configService.get('REDIS_HOST', 'localhost'),
-      port: this.configService.get('REDIS_PORT', 6379),
-      password: this.configService.get('REDIS_PASSWORD', undefined),
-      db: this.configService.get('REDIS_DB', 0),
-      maxRetriesPerRequest: 3,
-    });
+    const redisUrl = this.configService.get<string>('REDIS_URL');
+    if (redisUrl) {
+      // Railway / production: REDIS_URL=redis://default:password@host:port
+      this.client = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
+    } else {
+      // Local dev: individual REDIS_HOST / REDIS_PORT
+      this.client = new Redis({
+        host: this.configService.get('REDIS_HOST', 'localhost'),
+        port: this.configService.get<number>('REDIS_PORT', 6379),
+        password: this.configService.get('REDIS_PASSWORD', undefined),
+        db: this.configService.get<number>('REDIS_DB', 0),
+        maxRetriesPerRequest: 3,
+      });
+    }
   }
 
   getClient(): Redis {

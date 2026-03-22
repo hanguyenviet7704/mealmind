@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
+
+const apiInternalUrl = process.env.API_INTERNAL_URL || 'http://localhost:4000';
+
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: [
@@ -11,7 +14,7 @@ const nextConfig = {
     return [
       {
         source: '/api/v1/:path*',
-        destination: 'http://localhost:4000/api/v1/:path*',
+        destination: `${apiInternalUrl}/api/v1/:path*`,
       },
     ];
   },

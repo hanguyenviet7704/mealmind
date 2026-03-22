@@ -63,23 +63,27 @@ export default function OnboardingWizard() {
     if (currentStep > 1) setStep(currentStep - 1);
   };
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
+    try {
+      await apiClient('/onboarding/skip', { method: 'POST' });
+    } catch {
+      // skip gracefully even if API fails
+    }
     toast.info('Đã bỏ qua onboarding');
     router.push('/home');
   };
 
   const handleComplete = async () => {
     try {
-      await apiClient('/onboarding/taste-profile', {
+      await apiClient('/onboarding/quiz', {
         method: 'POST',
         body: JSON.stringify(formData),
       });
-      toast.success('Hoàn thành!');
-    } catch {
-      // Still navigate even if API fails
-      toast.success('Hoàn thành!');
+      toast.success('Thiết lập hoàn tất! Chào mừng đến MealMind 🎉');
+      setTimeout(() => router.push('/home'), 500);
+    } catch (err: any) {
+      toast.error(err?.message || 'Có lỗi xảy ra, vui lòng thử lại');
     }
-    setTimeout(() => router.push('/home'), 500);
   };
 
   const renderStep = () => {

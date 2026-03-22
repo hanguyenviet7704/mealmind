@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ImageWithFallback } from '@/components/layout/ImageWithFallback';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 
 /* ── Enum → Display mappings ─────────────────────────────── */
@@ -33,6 +34,7 @@ export default function HomeScreen() {
   const [mealType, setMealType] = useState('lunch');
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookmarked, setBookmarked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -53,6 +55,35 @@ export default function HomeScreen() {
       .catch(() => setRecipes([]))
       .finally(() => setLoading(false));
   }, [mealType]);
+
+  const handleBookmark = async (e: React.MouseEvent, recipe: RecipeSummary) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isBookmarked = bookmarked.has(recipe.id);
+    setBookmarked((prev) => {
+      const next = new Set(prev);
+      if (isBookmarked) next.delete(recipe.id);
+      else next.add(recipe.id);
+      return next;
+    });
+    try {
+      if (isBookmarked) {
+        await apiClient(`/recipes/${recipe.id}/bookmark`, { method: 'DELETE' });
+        toast.success(`Đã bỏ lưu "${recipe.name}"`);
+      } else {
+        await apiClient(`/recipes/${recipe.id}/bookmark`, { method: 'POST' });
+        toast.success(`Đã lưu "${recipe.name}"`);
+      }
+    } catch {
+      setBookmarked((prev) => {
+        const next = new Set(prev);
+        if (isBookmarked) next.add(recipe.id);
+        else next.delete(recipe.id);
+        return next;
+      });
+      toast.error('Có lỗi xảy ra!');
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
@@ -80,7 +111,7 @@ export default function HomeScreen() {
           <h2 className="text-lg font-semibold text-stone-800 mb-4">Công cụ nhanh</h2>
           {[
             { href: '/combo', emoji: '🍱', title: 'Combo Gia Đình', desc: 'Gợi ý mâm cơm 3 món' },
-            { href: '/recipes/random', emoji: '🎲', title: 'Món Ngẫu Nhiên', desc: 'Khám phá món mới lạ' },
+            { href: '/surprise', emoji: '🎲', title: 'Món Ngẫu Nhiên', desc: 'Khám phá món mới lạ' },
             { href: '/quick-cook', emoji: '⚡', title: 'Nấu Nhanh 15 Phút', desc: 'Giải pháp cho ngày bận' },
           ].map((tool) => (
             <Link key={tool.title} href={tool.href} className="block w-full bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-stone-100 text-center group hover:border-orange-200">
@@ -142,8 +173,12 @@ export default function HomeScreen() {
                 >
                   <div className="relative h-48 overflow-hidden">
                     <ImageWithFallback src={recipe.imageUrl || ''} alt={recipe.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    <button className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/70 backdrop-blur-md flex items-center justify-center text-stone-600 hover:text-orange-500 hover:bg-white transition-colors">
-                      <Heart className="w-4 h-4" />
+                    <button
+                      onClick={(e) => handleBookmark(e, recipe)}
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/70 backdrop-blur-md flex items-center justify-center hover:bg-white transition-colors hover:scale-110 active:scale-95"
+                      title={bookmarked.has(recipe.id) ? 'Bỏ lưu' : 'Lưu công thức'}
+                    >
+                      <Heart className={`w-4 h-4 transition-colors ${bookmarked.has(recipe.id) ? 'fill-red-500 text-red-500' : 'text-stone-600 hover:text-orange-500'}`} />
                     </button>
                   </div>
                   <div className="p-5 flex-1 flex flex-col">

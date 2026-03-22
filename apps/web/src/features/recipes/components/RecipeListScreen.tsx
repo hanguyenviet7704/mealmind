@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, SlidersHorizontal, Heart, Clock, Flame, ChevronRight } from 'lucide-react';
+import { Search, SlidersHorizontal, Heart, Clock, Flame, ChevronRight, BookmarkPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -124,14 +124,21 @@ export default function RecipeListScreen() {
             <h1 className="text-2xl font-bold text-stone-900 mb-2">Tất cả món ăn</h1>
             <p className="text-stone-600">Hiển thị {total} công thức phù hợp</p>
           </div>
-          <div className="hidden sm:block">
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white border border-stone-200 text-stone-700 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block p-2.5 outline-none cursor-pointer">
-              <option value="popularity">Phổ biến nhất</option>
-              <option value="createdAt">Mới nhất</option>
-              <option value="cookTime">Thời gian nấu ngắn nhất</option>
-              <option value="calories">Calories thấp nhất</option>
-            </select>
+          <div className="flex items-center gap-3">
+            <Link href="/recipes/new">
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2">
+                <BookmarkPlus className="w-4 h-4" /> Thêm món
+              </Button>
+            </Link>
+            <div className="hidden sm:block">
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="bg-white border border-stone-200 text-stone-700 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block p-2.5 outline-none cursor-pointer">
+                <option value="popularity">Phổ biến nhất</option>
+                <option value="createdAt">Mới nhất</option>
+                <option value="cookTime">Thời gian nấu ngắn nhất</option>
+                <option value="calories">Calories thấp nhất</option>
+              </select>
+            </div>
           </div>
         </div>
 

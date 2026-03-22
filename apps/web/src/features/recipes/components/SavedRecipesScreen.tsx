@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Search, Loader2, Heart, Clock, Flame, ChevronRight } from 'lucide-react';
+import { ChevronLeft, Search, Loader2, Heart, Clock, Flame, ChevronRight, BookmarkPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ImageWithFallback } from '@/components/layout/ImageWithFallback';
 import { motion } from 'framer-motion';
@@ -67,14 +68,21 @@ export default function SavedRecipesScreen() {
   return (
     <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 pb-24 lg:pb-6 relative min-h-screen">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6 bg-white sticky top-0 md:static z-10 py-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-        <button
-          onClick={() => router.back()}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-100 transition-colors"
-        >
-          <ChevronLeft className="w-6 h-6 text-stone-700" />
-        </button>
-        <h1 className="text-xl font-bold text-stone-900">Món ăn đã lưu</h1>
+      <div className="flex items-center justify-between gap-3 mb-6 bg-white sticky top-0 md:static z-10 py-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-100 transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6 text-stone-700" />
+          </button>
+          <h1 className="text-xl font-bold text-stone-900">Món ăn đã lưu</h1>
+        </div>
+        <Link href="/recipes/new">
+          <Button className="bg-orange-500 hover:bg-orange-600 text-white gap-2" size="sm">
+            <BookmarkPlus className="w-4 h-4" /> Thêm món
+          </Button>
+        </Link>
       </div>
 
       {/* Search & Filter */}

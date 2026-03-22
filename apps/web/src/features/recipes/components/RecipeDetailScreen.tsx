@@ -132,7 +132,10 @@ export default function RecipeDetailScreen({ recipeId }: { recipeId: string }) {
               <div className="flex flex-col gap-1"><span className="text-stone-500 text-sm flex items-center gap-1.5"><Flame className="w-4 h-4" /> Calories</span><span className="font-semibold text-stone-900">{recipe.nutrition?.calories || '—'} kcal</span></div>
               <div className="flex flex-col gap-1"><span className="text-stone-500 text-sm flex items-center gap-1.5"><ChefHat className="w-4 h-4" /> Độ khó</span><span className="font-semibold text-stone-900">{difficultyLabels[recipe.difficulty] || recipe.difficulty}</span></div>
             </div>
-            <Button className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white gap-2 h-12 px-8 text-lg font-medium rounded-xl">
+            <Button
+              onClick={() => router.push(`/recipes/${recipe.id}/cook`)}
+              className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white gap-2 h-12 px-8 text-lg font-medium rounded-xl"
+            >
               <Play className="w-5 h-5 fill-current" /> Bắt đầu nấu
             </Button>
           </div>
