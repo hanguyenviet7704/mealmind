@@ -1,0 +1,14 @@
+{
+  "name": "mealmind",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "prettier": "^3.0.0",
+    "turbo": "latest",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

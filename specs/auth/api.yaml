@@ -1,0 +1,471 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Authentication API
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Auth
+    description: Registration, login, token management
+  - name: Notifications
+    description: In-app notifications
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                  description: Min 8 chars, 1 uppercase, 1 lowercase, 1 digit
+      responses:
+        '201':
+          description: User created, auto-login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with email/password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                rememberMe:
+                  type: boolean
+                  default: false
+                  description: true = refresh token 30 days, false = 7 days
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+        '429':
+          description: Too many attempts, account temporarily locked
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      summary: Login/register with Google OAuth
+      operationId: googleAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken:
+                  type: string
+                  description: Google ID token from client-side OAuth
+      responses:
+        '200':
+          description: Login success (existing user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '201':
+          description: New user created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/apple:
+    post:
+      tags: [Auth]
+      summary: Login/register with Apple Sign In
+      operationId: appleAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityToken, authorizationCode]
+              properties:
+                identityToken:
+                  type: string
+                authorizationCode:
+                  type: string
+                fullName:
+                  type: object
+                  description: Only sent on first auth
+                  properties:
+                    givenName: { type: string }
+                    familyName: { type: string }
+                email:
+                  type: string
+                  description: Only sent on first auth, may be relay email
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '201':
+          description: New user created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (revoke refresh token)
+      operationId: logout
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Token to revoke. If omitted, revoke all.
+                allDevices:
+                  type: boolean
+                  default: false
+      responses:
+        '204':
+          description: Logged out
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset email sent (always 200, even if email not found — security)
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token:
+                  type: string
+                  description: Token from reset email
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: Password reset success, all sessions revoked
+        '400':
+          description: Invalid or expired token
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password (authenticated)
+      description: Đổi mật khẩu — yêu cầu mật khẩu hiện tại. Sau khi đổi thành công, revoke tất cả refresh tokens trừ current session. Screen S33/M-S33.
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: Min 8 chars, 1 uppercase, 1 lowercase, 1 digit
+      responses:
+        '204':
+          description: Password changed, other sessions revoked
+        '400':
+          description: New password same as current, or validation error
+        '401':
+          description: Current password incorrect
+
+  /auth/account:
+    delete:
+      tags: [Auth]
+      summary: Delete account permanently
+      description: Xóa vĩnh viễn tài khoản và toàn bộ dữ liệu (taste profile, meal plans, history). Yêu cầu xác nhận bằng text "XÓA TÀI KHOẢN". Screen S36/M-S36.
+      operationId: deleteAccount
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation]
+              properties:
+                confirmation:
+                  type: string
+                  enum: ["XÓA TÀI KHOẢN"]
+                  description: User phải gõ đúng chuỗi này để xác nhận
+      responses:
+        '204':
+          description: Account deleted, all data purged
+        '400':
+          description: Confirmation text incorrect
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Get notifications list
+      description: Danh sách thông báo của user, sorted by createdAt desc. Screen M-S39.
+      operationId: listNotifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+          description: true = chỉ lấy chưa đọc
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      unreadCount: { type: integer }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+
+  /notifications/{id}:
+    patch:
+      tags: [Notifications]
+      summary: Mark notification as read
+      operationId: readNotification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                read: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Notifications]
+      summary: Delete notification
+      operationId: deleteNotification
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              description: JWT, expires 15 min
+            refreshToken:
+              type: string
+              description: Opaque token, expires 7-30 days
+            expiresIn:
+              type: integer
+              description: Access token TTL in seconds (900)
+            user:
+              $ref: '#/components/schemas/UserSummary'
+            isNewUser:
+              type: boolean
+              description: true if just registered (→ redirect to onboarding)
+        error:
+          type: object
+          nullable: true
+
+    UserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+        avatarUrl: { type: string }
+        tier: { type: string, enum: [free, pro] }
+        onboardingCompleted: { type: boolean }
+
+    UserResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserSummary'
+        error:
+          type: object
+          nullable: true
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [meal_suggestion, meal_plan, timer_done, system]
+        title: { type: string }
+        body: { type: string }
+        read: { type: boolean }
+        deepLink: { type: string, description: "Screen to navigate on tap, e.g. /suggestions" }
+        createdAt: { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      properties:
+        data: { type: object, nullable: true }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }

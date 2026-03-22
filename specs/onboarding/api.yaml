@@ -1,0 +1,606 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Onboarding & Taste Profile API
+  description: API cho tính năng Onboarding quiz và quản lý Taste Profile
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Onboarding
+    description: Onboarding quiz flow
+  - name: Taste Profiles
+    description: CRUD taste profiles
+  - name: Family Profiles
+    description: Quản lý multi-profile gia đình
+
+paths:
+  /onboarding/quiz:
+    post:
+      tags: [Onboarding]
+      summary: Submit onboarding quiz answers
+      description: Gửi toàn bộ câu trả lời quiz hoặc từng phần (partial submit)
+      operationId: submitQuiz
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizSubmission'
+      responses:
+        '201':
+          description: Quiz submitted, taste profile created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /onboarding/quiz/progress:
+    get:
+      tags: [Onboarding]
+      summary: Get current quiz progress
+      description: Lấy tiến trình quiz hiện tại (cho trường hợp user thoát giữa chừng)
+      operationId: getQuizProgress
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current quiz progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizProgressResponse'
+
+  /onboarding/quiz/{step}:
+    patch:
+      tags: [Onboarding]
+      summary: Save individual quiz step
+      description: Lưu từng bước quiz riêng lẻ (auto-save)
+      operationId: saveQuizStep
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: step
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuizStepData'
+      responses:
+        '200':
+          description: Step saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuizProgressResponse'
+
+  /onboarding/skip:
+    post:
+      tags: [Onboarding]
+      summary: Skip onboarding quiz
+      description: Bỏ qua quiz, tạo default taste profile
+      operationId: skipQuiz
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Default taste profile created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileResponse'
+
+  /taste-profiles:
+    get:
+      tags: [Taste Profiles]
+      summary: Get all taste profiles for current user
+      description: Lấy tất cả taste profiles (bao gồm family members)
+      operationId: getTasteProfiles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of taste profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileListResponse'
+
+  /taste-profiles/{profileId}:
+    get:
+      tags: [Taste Profiles]
+      summary: Get taste profile by ID
+      operationId: getTasteProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Taste profile detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileResponse'
+        '404':
+          description: Profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      tags: [Taste Profiles]
+      summary: Update taste profile
+      description: Cập nhật partial hoặc toàn bộ taste profile
+      operationId: updateTasteProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TasteProfileUpdate'
+      responses:
+        '200':
+          description: Updated taste profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileResponse'
+
+  /family-profiles:
+    get:
+      tags: [Family Profiles]
+      summary: List all family member profiles
+      operationId: getFamilyProfiles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of family profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyProfileListResponse'
+
+    post:
+      tags: [Family Profiles]
+      summary: Create family member profile
+      operationId: createFamilyProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyProfileCreate'
+      responses:
+        '201':
+          description: Family profile created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyProfileResponse'
+        '400':
+          description: Validation error or max profiles reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /family-profiles/{profileId}:
+    patch:
+      tags: [Family Profiles]
+      summary: Update family member profile
+      operationId: updateFamilyProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FamilyProfileUpdate'
+      responses:
+        '200':
+          description: Updated family profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FamilyProfileResponse'
+
+    delete:
+      tags: [Family Profiles]
+      summary: Delete family member profile
+      operationId: deleteFamilyProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Profile deleted
+        '403':
+          description: Cannot delete primary profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /family-profiles/active:
+    patch:
+      tags: [Family Profiles]
+      summary: Set active profile
+      description: Chọn profile đang active hoặc mode "Cả gia đình"
+      operationId: setActiveProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profileId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: "null = mode Cả gia đình (merge all)"
+              required:
+                - profileId
+      responses:
+        '200':
+          description: Active profile set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveProfileResponse'
+
+  /family-profiles/merged:
+    get:
+      tags: [Family Profiles]
+      summary: Get merged family preferences
+      description: Lấy preferences đã merge cho mode "Cả gia đình"
+      operationId: getMergedPreferences
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Merged preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteProfileResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    QuizSubmission:
+      type: object
+      properties:
+        regions:
+          type: array
+          items:
+            type: string
+            enum: [north, central, south, international]
+          description: Vùng miền ẩm thực ưa thích
+        spiceLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Mức độ cay (1=không cay, 5=rất cay)
+        sweetLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Mức độ ngọt
+        saltLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Mức độ mặn
+        allergens:
+          type: array
+          items:
+            type: string
+          description: Danh sách dị ứng
+        customAllergens:
+          type: array
+          items:
+            type: string
+          description: Dị ứng tùy chỉnh (free text)
+        dietType:
+          type: string
+          enum: [normal, lacto_ovo_vegetarian, vegan, keto, low_carb, paleo]
+        maxCookTime:
+          type: string
+          enum: [under_15, 15_to_30, 30_to_60, over_60]
+          description: Thời gian nấu tối đa chấp nhận
+        familySize:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Số người ăn
+
+    QuizStepData:
+      type: object
+      description: Data cho từng bước quiz (schema tùy theo step)
+      additionalProperties: true
+
+    QuizProgressResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            completedSteps:
+              type: array
+              items:
+                type: integer
+            totalSteps:
+              type: integer
+              example: 5
+            currentStep:
+              type: integer
+            partialData:
+              type: object
+              additionalProperties: true
+
+    TasteProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        profileName:
+          type: string
+          example: "Mẹ Lan"
+        isPrimary:
+          type: boolean
+        regions:
+          type: array
+          items:
+            type: string
+            enum: [north, central, south, international]
+        spiceLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        sweetLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        saltLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        allergens:
+          type: array
+          items:
+            type: string
+        dietType:
+          type: string
+          enum: [normal, lacto_ovo_vegetarian, vegan, keto, low_carb, paleo]
+        maxCookTime:
+          type: string
+          enum: [under_15, 15_to_30, 30_to_60, over_60]
+        familySize:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TasteProfileUpdate:
+      type: object
+      description: Partial update - chỉ gửi fields cần thay đổi
+      properties:
+        profileName:
+          type: string
+        regions:
+          type: array
+          items:
+            type: string
+        spiceLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        sweetLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        saltLevel:
+          type: integer
+          minimum: 1
+          maximum: 5
+        allergens:
+          type: array
+          items:
+            type: string
+        dietType:
+          type: string
+        maxCookTime:
+          type: string
+        familySize:
+          type: integer
+
+    TasteProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TasteProfile'
+        error:
+          type: object
+          nullable: true
+
+    TasteProfileListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TasteProfile'
+        error:
+          type: object
+          nullable: true
+
+    FamilyProfileCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "Con Bảo"
+        avatarUrl:
+          type: string
+          format: uri
+        ageRange:
+          type: string
+          enum: [child_under_6, child_6_12, teen, adult, senior]
+        tasteProfile:
+          $ref: '#/components/schemas/QuizSubmission'
+
+    FamilyProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+        ageRange:
+          type: string
+          enum: [child_under_6, child_6_12, teen, adult, senior]
+        tasteProfile:
+          $ref: '#/components/schemas/TasteProfileUpdate'
+
+    FamilyProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        avatarUrl:
+          type: string
+        ageRange:
+          type: string
+        isPrimary:
+          type: boolean
+        tasteProfile:
+          $ref: '#/components/schemas/TasteProfile'
+        createdAt:
+          type: string
+          format: date-time
+
+    FamilyProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/FamilyProfile'
+        error:
+          type: object
+          nullable: true
+
+    FamilyProfileListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/FamilyProfile'
+        error:
+          type: object
+          nullable: true
+
+    ActiveProfileResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            activeProfileId:
+              type: string
+              format: uuid
+              nullable: true
+            mode:
+              type: string
+              enum: [individual, family]
+        error:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

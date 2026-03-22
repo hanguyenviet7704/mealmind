@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+.turbo
+.git
+*.log
+.env.local
+.env.*.local
+.vercel
+out
+build
+venv
+__pycache__
+.pytest_cache
+.vscode
+.idea

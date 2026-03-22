@@ -1,0 +1,734 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Recipe Detail & Cooking Guide API
+  description: API cho danh sách, chi tiết, tìm kiếm, và bookmark recipe. Hỗ trợ ingredient scaling và dietary filter tự động.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Recipes
+    description: Recipe list, detail, và search
+  - name: Bookmarks
+    description: Bookmark/favorite recipes
+  - name: Interactions
+    description: Cooking history, ratings, user actions
+
+paths:
+  /recipes:
+    get:
+      tags: [Recipes]
+      summary: List recipes
+      description: Lấy danh sách recipes với pagination, filter theo cuisine/mealType/difficulty. Dietary filter tự động áp dụng dựa trên active profile.
+      operationId: listRecipes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cuisine
+          in: query
+          schema:
+            type: string
+            enum: [north, central, south, international]
+          description: Filter theo vùng miền
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+          description: Filter theo loại bữa ăn
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+          description: Filter theo độ khó
+        - name: maxCookTime
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: Filter thời gian nấu tối đa (phút)
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [cookTime, calories, createdAt, popularity]
+            default: popularity
+          description: Sắp xếp theo
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Danh sách recipes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeListResponse'
+        '401':
+          description: Unauthorized
+
+  /recipes/search:
+    get:
+      tags: [Recipes]
+      summary: Full-text search recipes
+      description: Tìm kiếm recipe bằng Meilisearch. Hỗ trợ tiếng Việt có dấu và không dấu, typo tolerance. Dietary filter tự động áp dụng.
+      operationId: searchRecipes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Từ khóa tìm kiếm (ví dụ "pho", "phở bò", "canh chua")
+        - name: cuisine
+          in: query
+          schema:
+            type: string
+            enum: [north, central, south, international]
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+            enum: [easy, medium, hard]
+        - name: maxCookTime
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [relevance, cookTime, calories, popularity]
+            default: relevance
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Kết quả tìm kiếm
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeSearchResponse'
+        '400':
+          description: Query rỗng hoặc không hợp lệ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /recipes/{recipeId}:
+    get:
+      tags: [Recipes]
+      summary: Get recipe detail
+      description: Lấy chi tiết recipe bao gồm ingredients, cooking steps, và nutrition. Hỗ trợ scale ingredients theo số người ăn qua query param servings.
+      operationId: getRecipeDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: servings
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+          description: Số người ăn mong muốn. Nếu không truyền, dùng defaultServings của recipe. Ingredients sẽ được scale theo công thức quantity * (servings / defaultServings).
+      responses:
+        '200':
+          description: Chi tiết recipe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeDetailResponse'
+        '404':
+          description: Recipe không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /recipes/{recipeId}/bookmark:
+    post:
+      tags: [Bookmarks]
+      summary: Bookmark recipe
+      description: Thêm recipe vào danh sách yêu thích
+      operationId: bookmarkRecipe
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Bookmark đã được tạo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkResponse'
+        '409':
+          description: Recipe đã được bookmark trước đó
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Recipe không tồn tại
+
+    delete:
+      tags: [Bookmarks]
+      summary: Remove bookmark
+      description: Xóa recipe khỏi danh sách yêu thích
+      operationId: removeBookmark
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Bookmark đã được xóa
+        '404':
+          description: Bookmark không tồn tại
+
+  /recipes/{recipeId}/ratings:
+    post:
+      tags: [Recipes]
+      summary: Rate a recipe
+      description: Đánh giá món ăn sau khi nấu. Screen M-S42 RateRecipeSheet.
+      operationId: rateRecipe
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recipeId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stars]
+              properties:
+                stars:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                tags:
+                  type: array
+                  items:
+                    type: string
+                    enum: [ngon, de_nau, nhanh, dep_mat, se_nau_lai]
+                  description: Quick tags từ RateRecipeSheet
+                note:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '201':
+          description: Rating saved
+        '409':
+          description: Already rated this recipe (1 rating per cook session)
+
+  /interactions/history:
+    get:
+      tags: [Interactions]
+      summary: Get cooking history
+      description: Lịch sử nấu ăn của user, grouped by date. Screen M-S38 CookingHistoryScreen.
+      operationId: getCookingHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema: { type: string, enum: [cook, view, skip], default: cook }
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+          description: Số ngày lấy lịch sử (30 = 1 tháng)
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        '200':
+          description: Cooking history grouped by date
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CookingHistoryGroup'
+                  meta:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      monthSummary: { type: string, example: "Tháng 3/2026: 45 món" }
+
+  /meal-logs/{id}:
+    delete:
+      tags: [Interactions]
+      summary: Delete a meal log entry
+      description: Xóa 1 entry khỏi lịch sử nấu ăn (swipe-left action ở M-S38).
+      operationId: deleteMealLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+
+  /recipes/bookmarks:
+    get:
+      tags: [Bookmarks]
+      summary: Get bookmarked recipes
+      description: Lấy danh sách recipes đã bookmark của user hiện tại. Hỗ trợ pagination, search, và filter.
+      operationId: getBookmarkedRecipes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Tìm kiếm trong danh sách bookmark
+        - name: cuisine
+          in: query
+          schema:
+            type: string
+            enum: [north, central, south, international]
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Danh sách recipes đã bookmark
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkListResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RecipeSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Phở bò Hà Nội"
+        imageUrl:
+          type: string
+          format: uri
+        description:
+          type: string
+          example: "Phở bò truyền thống Hà Nội với nước dùng ninh xương 12 tiếng"
+        cuisine:
+          type: string
+          enum: [north, central, south, international]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        prepTime:
+          type: integer
+          description: Thời gian chuẩn bị (phút)
+        cookTime:
+          type: integer
+          description: Thời gian nấu (phút)
+        totalTime:
+          type: integer
+          description: Tổng thời gian (prepTime + cookTime)
+        defaultServings:
+          type: integer
+          description: Số người ăn mặc định
+        calories:
+          type: integer
+          description: Calo per serving
+        mealTypes:
+          type: array
+          items:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+        isBookmarked:
+          type: boolean
+          description: User hiện tại đã bookmark chưa
+
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Thịt bò gầu"
+        quantity:
+          type: number
+          format: float
+          description: Số lượng (đã scale nếu có query param servings)
+          example: 300
+        originalQuantity:
+          type: number
+          format: float
+          description: Số lượng gốc (theo defaultServings)
+          example: 200
+        unit:
+          type: string
+          description: Đơn vị
+          example: "gram"
+        group:
+          type: string
+          enum: [main, seasoning, garnish]
+          description: Nhóm nguyên liệu
+        notes:
+          type: string
+          nullable: true
+          description: Ghi chú (ví dụ "thái lát mỏng")
+
+    CookingStep:
+      type: object
+      properties:
+        stepNumber:
+          type: integer
+          minimum: 1
+          example: 1
+        description:
+          type: string
+          example: "Rửa sạch xương bò, chần qua nước sôi để loại bỏ bọt bẩn"
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        duration:
+          type: integer
+          nullable: true
+          description: Thời gian thực hiện bước này (phút). Null nếu không cần timer.
+          example: 45
+        timerLabel:
+          type: string
+          nullable: true
+          description: Label cho timer (ví dụ "Hầm xương")
+          example: "Hầm xương"
+
+    Nutrition:
+      type: object
+      properties:
+        calories:
+          type: integer
+          description: Calo per serving
+        protein:
+          type: number
+          format: float
+          description: Protein (gram)
+        carbs:
+          type: number
+          format: float
+          description: Carbohydrate (gram)
+        fat:
+          type: number
+          format: float
+          description: Fat (gram)
+        fiber:
+          type: number
+          format: float
+          nullable: true
+          description: Fiber (gram)
+        sodium:
+          type: number
+          format: float
+          nullable: true
+          description: Sodium (mg)
+        servings:
+          type: integer
+          description: Số người ăn tương ứng với giá trị dinh dưỡng này
+
+    RecipeDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        galleryImages:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: Ảnh gallery bổ sung
+        description:
+          type: string
+        cuisine:
+          type: string
+          enum: [north, central, south, international]
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        prepTime:
+          type: integer
+        cookTime:
+          type: integer
+        totalTime:
+          type: integer
+        defaultServings:
+          type: integer
+        requestedServings:
+          type: integer
+          description: Số người ăn đang hiển thị (= query param servings hoặc defaultServings)
+        mealTypes:
+          type: array
+          items:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Video hướng dẫn tổng thể (Phase 2)
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ingredient'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CookingStep'
+        nutrition:
+          $ref: '#/components/schemas/Nutrition'
+        isBookmarked:
+          type: boolean
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags phụ (ví dụ "Truyền thống", "Nhanh gọn", "Healthy")
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Bookmark:
+      type: object
+      properties:
+        recipeId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+
+    RecipeListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeSummary'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+        error:
+          type: object
+          nullable: true
+
+    RecipeSearchResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeSummary'
+        meta:
+          type: object
+          properties:
+            query:
+              type: string
+              description: Query đã search
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+            processingTimeMs:
+              type: integer
+              description: Thời gian xử lý search (ms)
+        error:
+          type: object
+          nullable: true
+
+    RecipeDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RecipeDetail'
+        error:
+          type: object
+          nullable: true
+
+    BookmarkResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Bookmark'
+        error:
+          type: object
+          nullable: true
+
+    BookmarkListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecipeSummary'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+        error:
+          type: object
+          nullable: true
+
+    CookingHistoryGroup:
+      type: object
+      properties:
+        date: { type: string, format: date, example: "2026-03-21" }
+        label: { type: string, example: "Hôm nay (21/3)" }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              recipe:
+                $ref: '#/components/schemas/RecipeSummary'
+              mealType: { type: string, enum: [breakfast, lunch, dinner, snack] }
+              rating:
+                type: integer
+                nullable: true
+                minimum: 1
+                maximum: 5
+              cookedAt: { type: string, format: date-time }
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

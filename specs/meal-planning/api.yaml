@@ -1,0 +1,914 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Weekly Meal Planning API
+  description: API cho tính năng lên thực đơn tuần tự động
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: MealPlans
+    description: Quản lý thực đơn tuần
+  - name: Slots
+    description: Quản lý slot (bữa ăn) trong plan
+  - name: Sharing
+    description: Chia sẻ meal plan
+  - name: Export
+    description: Xuất meal plan
+  - name: Shopping
+    description: Shopping list từ meal plan
+
+paths:
+  /meal-plans:
+    post:
+      tags: [MealPlans]
+      summary: Generate new meal plan
+      description: Tạo thực đơn tuần mới (7 ngày × 3 bữa) bằng recommendation service
+      operationId: createMealPlan
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMealPlanRequest'
+      responses:
+        '201':
+          description: Meal plan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealPlanResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '409':
+          description: Too many draft plans (max 4)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [MealPlans]
+      summary: List user's meal plans
+      description: Lấy danh sách thực đơn tuần của user
+      operationId: listMealPlans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, archived]
+          description: Filter theo trạng thái plan
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: List of meal plans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealPlanListResponse'
+        '401':
+          description: Unauthorized
+
+  /meal-plans/{id}:
+    get:
+      tags: [MealPlans]
+      summary: Get meal plan detail
+      description: Lấy chi tiết thực đơn tuần bao gồm tất cả slots và recipes
+      operationId: getMealPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+      responses:
+        '200':
+          description: Meal plan detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealPlanDetailResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden — không có quyền xem plan này
+        '404':
+          description: Meal plan not found
+
+    patch:
+      tags: [MealPlans]
+      summary: Update meal plan
+      description: Cập nhật plan metadata, status, hoặc swap slots
+      operationId: updateMealPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMealPlanRequest'
+      responses:
+        '200':
+          description: Meal plan updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MealPlanDetailResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Meal plan not found
+
+    delete:
+      tags: [MealPlans]
+      summary: Delete meal plan
+      description: Xóa meal plan (chỉ draft hoặc archived)
+      operationId: deleteMealPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+      responses:
+        '204':
+          description: Meal plan deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden — không thể xóa plan active
+        '404':
+          description: Meal plan not found
+
+  /meal-plans/{id}/slots/{slotId}:
+    patch:
+      tags: [Slots]
+      summary: Update specific slot
+      description: Lock/unlock slot hoặc regenerate món cho slot cụ thể
+      operationId: updateSlot
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID của slot cần cập nhật
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSlotRequest'
+      responses:
+        '200':
+          description: Slot updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotResponse'
+        '400':
+          description: Invalid request (VD lock quá 70% slots)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Slot not found
+
+  /meal-plans/{id}/share:
+    post:
+      tags: [Sharing]
+      summary: Share meal plan with family
+      description: Tạo invite link hoặc share trực tiếp cho user khác
+      operationId: shareMealPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareMealPlanRequest'
+      responses:
+        '200':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden — chỉ owner có thể share
+        '404':
+          description: Meal plan not found
+        '409':
+          description: Đã đạt giới hạn 10 collaborators
+
+  /meal-plans/{id}/export:
+    get:
+      tags: [Export]
+      summary: Export meal plan
+      description: Xuất meal plan dưới dạng PDF hoặc ảnh
+      operationId: exportMealPlan
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MealPlanId'
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [pdf, png, jpg]
+          description: Định dạng xuất
+      responses:
+        '200':
+          description: Export URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Meal plan not found
+
+  /meal-plans/{planId}/slots/{slotId}/suggestions:
+    get:
+      tags: [Slots]
+      summary: Get alternative recipes for a slot
+      description: Trả 5 gợi ý thay thế cho 1 slot. Screen M-S22 SlotSwapSheet.
+      operationId: getSlotSuggestions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: slotId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: excludeRecipeIds
+          in: query
+          schema:
+            type: array
+            items: { type: string, format: uuid }
+          style: form
+          explode: false
+          description: Loại trừ các recipe đã hiển thị (dùng khi "Xem thêm")
+      responses:
+        '200':
+          description: 5 alternative recipes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SlotSuggestion'
+
+  /meal-plans/{planId}/slots/{slotId}:
+    patch:
+      tags: [Slots]
+      summary: Swap recipe in a slot
+      description: Đổi recipe của 1 slot. Screen M-S22 "Chọn", web drag-and-drop.
+      operationId: swapSlotRecipe
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: slotId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipeId]
+              properties:
+                recipeId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Slot updated with new recipe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SlotResponse'
+        '409':
+          description: Recipe already exists in this week's plan
+
+  /meal-plans/{id}/shopping:
+    get:
+      tags: [Shopping]
+      summary: Get shopping list for a meal plan
+      description: Tổng hợp nguyên liệu từ tất cả slots, group by category (thịt/rau/gia vị/đồ khô). Screen M-S24 / S24.
+      operationId: getShoppingList
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Shopping list grouped by category
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShoppingCategory'
+                  meta:
+                    type: object
+                    properties:
+                      totalItems: { type: integer }
+                      checkedItems: { type: integer }
+
+  /shopping/{itemId}:
+    patch:
+      tags: [Shopping]
+      summary: Toggle item checked status
+      description: Đánh dấu đã mua / bỏ đánh dấu. Screen M-S24 swipe-right hoặc tap checkbox.
+      operationId: toggleShoppingItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [checked]
+              properties:
+                checked: { type: boolean }
+      responses:
+        '200':
+          description: Item updated
+    delete:
+      tags: [Shopping]
+      summary: Remove item from shopping list
+      description: Xóa 1 item khỏi shopping list. Screen M-S24 swipe-left.
+      operationId: deleteShoppingItem
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    MealPlanId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Meal plan ID
+
+  schemas:
+    CreateMealPlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Tên thực đơn (tùy chọn)
+          example: "Thực đơn tuần 12/2026"
+        weekStart:
+          type: string
+          format: date
+          description: Ngày bắt đầu tuần (Thứ 2). Mặc định tuần tiếp theo
+          example: "2026-03-23"
+        servings:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 2
+          description: Số người ăn
+        profileId:
+          type: string
+          format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+        nutritionGoals:
+          $ref: '#/components/schemas/NutritionGoals'
+        preferences:
+          type: object
+          properties:
+            mealPrepFriendly:
+              type: boolean
+              default: false
+              description: Ưu tiên món dễ meal prep
+            maxCookTimeMinutes:
+              type: integer
+              description: Thời gian nấu tối đa per món (phút)
+            excludeRecipeIds:
+              type: array
+              items:
+                type: string
+                format: uuid
+              description: Danh sách recipe IDs không muốn xuất hiện
+
+    UpdateMealPlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Đổi tên plan
+        status:
+          type: string
+          enum: [active, archived]
+          description: Thay đổi trạng thái plan
+        swapSlots:
+          type: object
+          description: Swap 2 slot với nhau
+          properties:
+            slotIdA:
+              type: string
+              format: uuid
+            slotIdB:
+              type: string
+              format: uuid
+          required:
+            - slotIdA
+            - slotIdB
+        regenerateUnlocked:
+          type: boolean
+          description: Regenerate tất cả slot chưa lock
+          default: false
+
+    UpdateSlotRequest:
+      type: object
+      properties:
+        locked:
+          type: boolean
+          description: Lock hoặc unlock slot
+        regenerate:
+          type: boolean
+          description: Regenerate món mới cho slot này
+          default: false
+
+    ShareMealPlanRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [link, direct]
+          description: Kiểu share — tạo link hoặc invite trực tiếp
+        inviteeEmail:
+          type: string
+          format: email
+          description: Email người được invite (bắt buộc khi type=direct)
+        inviteeUserId:
+          type: string
+          format: uuid
+          description: User ID người được invite (thay thế email)
+        role:
+          type: string
+          enum: [viewer, editor]
+          default: viewer
+          description: Quyền của người được share
+      required:
+        - type
+
+    NutritionGoals:
+      type: object
+      properties:
+        dailyCalories:
+          type: integer
+          description: Mục tiêu calo hàng ngày
+          example: 2000
+        dailyProteinGrams:
+          type: number
+          format: float
+          description: Mục tiêu protein (g) hàng ngày
+          example: 150
+        dailyCarbGrams:
+          type: number
+          format: float
+          description: Mục tiêu carb (g) hàng ngày
+          example: 250
+        dailyFatGrams:
+          type: number
+          format: float
+          description: Mục tiêu fat (g) hàng ngày
+          example: 65
+
+    MealPlanSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Thực đơn tuần 12/2026"
+        weekStart:
+          type: string
+          format: date
+        weekEnd:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, active, archived]
+        servings:
+          type: integer
+        totalSlots:
+          type: integer
+          description: Tổng số slot (thường 21)
+        lockedSlots:
+          type: integer
+          description: Số slot đã lock
+        avgDailyCalories:
+          type: integer
+          description: Calo trung bình mỗi ngày
+        collaboratorCount:
+          type: integer
+          description: Số người đang share
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    MealSlot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        day:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: "Ngày trong tuần (0=Thứ 2, 6=Chủ nhật)"
+        dayLabel:
+          type: string
+          example: "Thứ 2"
+        mealType:
+          type: string
+          enum: [breakfast, lunch, dinner]
+        recipe:
+          $ref: '#/components/schemas/SlotRecipe'
+        locked:
+          type: boolean
+          default: false
+        calories:
+          type: integer
+          description: Tổng calo của slot
+        protein:
+          type: number
+          format: float
+        carbs:
+          type: number
+          format: float
+        fat:
+          type: number
+          format: float
+
+    SlotRecipe:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Bún chả Hà Nội"
+        imageUrl:
+          type: string
+          format: uri
+        cookTime:
+          type: integer
+          description: Thời gian nấu (phút)
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        cuisine:
+          type: string
+          example: "Miền Bắc"
+        mainProtein:
+          type: string
+          description: Loại protein chính
+          example: "Thịt lợn"
+
+    DaySummary:
+      type: object
+      properties:
+        day:
+          type: integer
+        dayLabel:
+          type: string
+        totalCalories:
+          type: integer
+        totalProtein:
+          type: number
+          format: float
+        totalCarbs:
+          type: number
+          format: float
+        totalFat:
+          type: number
+          format: float
+        totalFiber:
+          type: number
+          format: float
+        calorieTargetPercent:
+          type: number
+          format: float
+          description: "% so với target calo (VD: 98.5 = đạt 98.5% target)"
+
+    WeekSummary:
+      type: object
+      properties:
+        avgDailyCalories:
+          type: integer
+        avgDailyProtein:
+          type: number
+          format: float
+        avgDailyCarbs:
+          type: number
+          format: float
+        avgDailyFat:
+          type: number
+          format: float
+        proteinVariety:
+          type: array
+          items:
+            type: string
+          description: Danh sách loại protein đã sử dụng trong tuần
+          example: ["Thịt bò", "Cá", "Thịt gà", "Đậu hũ", "Tôm"]
+
+    Collaborator:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        joinedAt:
+          type: string
+          format: date-time
+
+    MealPlanResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MealPlanSummary'
+        error:
+          type: object
+          nullable: true
+
+    MealPlanListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MealPlanSummary'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+        error:
+          type: object
+          nullable: true
+
+    MealPlanDetailResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            plan:
+              $ref: '#/components/schemas/MealPlanSummary'
+            slots:
+              type: array
+              items:
+                $ref: '#/components/schemas/MealSlot'
+            daySummaries:
+              type: array
+              items:
+                $ref: '#/components/schemas/DaySummary'
+            weekSummary:
+              $ref: '#/components/schemas/WeekSummary'
+            nutritionGoals:
+              $ref: '#/components/schemas/NutritionGoals'
+            collaborators:
+              type: array
+              items:
+                $ref: '#/components/schemas/Collaborator'
+        error:
+          type: object
+          nullable: true
+
+    SlotResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MealSlot'
+        error:
+          type: object
+          nullable: true
+
+    ShareResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            shareId:
+              type: string
+              format: uuid
+            type:
+              type: string
+              enum: [link, direct]
+            inviteLink:
+              type: string
+              format: uri
+              description: URL invite (chỉ khi type=link)
+            inviteeEmail:
+              type: string
+              format: email
+              description: Email người được invite (chỉ khi type=direct)
+            role:
+              type: string
+              enum: [viewer, editor]
+            expiresAt:
+              type: string
+              format: date-time
+              description: Thời gian hết hạn link (chỉ khi type=link)
+        error:
+          type: object
+          nullable: true
+
+    ExportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            format:
+              type: string
+              enum: [pdf, png, jpg]
+            url:
+              type: string
+              format: uri
+              description: URL download file
+            expiresAt:
+              type: string
+              format: date-time
+              description: URL hết hạn sau 1 giờ
+        error:
+          type: object
+          nullable: true
+
+    SlotSuggestion:
+      type: object
+      description: Gợi ý thay thế cho 1 slot trong meal plan
+      properties:
+        recipeId: { type: string, format: uuid }
+        name: { type: string }
+        imageUrl: { type: string, format: uri }
+        cookTime: { type: integer, description: "phút" }
+        calories: { type: integer }
+        difficulty: { type: string, enum: [easy, medium, hard] }
+        tags: { type: array, items: { type: string } }
+
+    ShoppingCategory:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [meat_fish, vegetables, seasoning, dry_goods, dairy, other]
+        label: { type: string, example: "🥩 Thịt cá" }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingItem'
+
+    ShoppingItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: "Thịt bò nạm" }
+        quantity: { type: number }
+        unit: { type: string, example: "gram" }
+        checked: { type: boolean, default: false }
+        recipeNames:
+          type: array
+          items: { type: string }
+          description: Tên các món cần nguyên liệu này
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "MAX_DRAFT_PLANS_EXCEEDED"
+            message:
+              type: string
+              example: "Bạn đã có 4 draft plans. Vui lòng archive hoặc xóa bớt."
+            details:
+              type: object

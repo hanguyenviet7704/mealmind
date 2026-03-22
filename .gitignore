@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.next/
+.turbo/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+
+# ML
+*.h5
+*.pkl
+*.pt
+*.onnx
+models/*.bin
+mlruns/
+
+# Logs
+*.log
+logs/
+
+# Data (keep seeds, ignore raw/processed)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Mobile
+apps/mobile/android/app/build/
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+
+# Agent tools (không cần push lên GitHub)
+.antigravity/
+.claude/
+.codex/
+.cursor/
+
+# Temp files
+tmp_figma_node*.json
+
+# Prisma generated (sẽ generate lại khi deploy)
+services/api/src/generated/

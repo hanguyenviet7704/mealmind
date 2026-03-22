@@ -1,0 +1,521 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Nutrition Tracking API
+  description: API cho tính năng theo dõi dinh dưỡng
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: RecipeNutrition
+    description: Thông tin dinh dưỡng per recipe
+  - name: NutritionSummary
+    description: Tổng hợp dinh dưỡng hàng ngày/tuần
+  - name: NutritionGoals
+    description: Mục tiêu dinh dưỡng cá nhân
+
+paths:
+  /recipes/{id}/nutrition:
+    get:
+      tags: [RecipeNutrition]
+      summary: Get nutrition info per recipe
+      description: Lấy thông tin dinh dưỡng chi tiết của recipe, tính từ ingredient quantities
+      operationId: getRecipeNutrition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Recipe ID
+        - name: servings
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 1
+          description: Số serving để tính tổng dinh dưỡng
+      responses:
+        '200':
+          description: Nutrition info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecipeNutritionResponse'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Recipe not found
+
+  /nutrition/daily:
+    get:
+      tags: [NutritionSummary]
+      summary: Get daily nutrition summary
+      description: Tổng hợp dinh dưỡng trong ngày từ active meal plan
+      operationId: getDailyNutrition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Ngày cần xem (YYYY-MM-DD)
+          example: "2026-03-20"
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+      responses:
+        '200':
+          description: Daily nutrition summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyNutritionResponse'
+        '401':
+          description: Unauthorized
+
+  /nutrition/weekly:
+    get:
+      tags: [NutritionSummary]
+      summary: Get weekly nutrition summary
+      description: Tổng hợp dinh dưỡng 7 ngày từ active meal plan
+      operationId: getWeeklyNutrition
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: weekStart
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Ngày bắt đầu tuần (Thứ 2, YYYY-MM-DD)
+          example: "2026-03-16"
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+      responses:
+        '200':
+          description: Weekly nutrition summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeeklyNutritionResponse'
+        '401':
+          description: Unauthorized
+
+  /nutrition/goals:
+    get:
+      tags: [NutritionGoals]
+      summary: Get user's nutrition goals
+      description: Lấy mục tiêu dinh dưỡng hiện tại của user/profile
+      operationId: getNutritionGoals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+      responses:
+        '200':
+          description: Current nutrition goals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalsResponse'
+        '401':
+          description: Unauthorized
+
+    put:
+      tags: [NutritionGoals]
+      summary: Set/update nutrition goals
+      description: Đặt hoặc cập nhật mục tiêu dinh dưỡng cá nhân
+      operationId: updateNutritionGoals
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNutritionGoalsRequest'
+      responses:
+        '200':
+          description: Goals updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NutritionGoalsResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    MacroNutrients:
+      type: object
+      properties:
+        calories:
+          type: integer
+          description: Calories (kcal)
+          example: 450
+        protein:
+          type: number
+          format: float
+          description: Protein (g)
+          example: 35.2
+        carbs:
+          type: number
+          format: float
+          description: Carbohydrates (g)
+          example: 42.8
+        fat:
+          type: number
+          format: float
+          description: Fat (g)
+          example: 15.3
+        fiber:
+          type: number
+          format: float
+          description: Fiber (g)
+          example: 4.6
+
+    MacroBreakdown:
+      type: object
+      description: Phần trăm macro breakdown
+      properties:
+        proteinPercent:
+          type: number
+          format: float
+          description: "% calories từ protein"
+          example: 31.3
+        carbsPercent:
+          type: number
+          format: float
+          description: "% calories từ carb"
+          example: 38.0
+        fatPercent:
+          type: number
+          format: float
+          description: "% calories từ fat"
+          example: 30.6
+
+    IngredientNutrition:
+      type: object
+      properties:
+        ingredientId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Ức gà"
+        quantityGrams:
+          type: number
+          format: float
+          description: Khối lượng (g)
+        macros:
+          $ref: '#/components/schemas/MacroNutrients'
+        estimated:
+          type: boolean
+          default: false
+          description: true nếu nutrition data là ước tính (thiếu data chính xác)
+
+    RecipeNutrition:
+      type: object
+      properties:
+        recipeId:
+          type: string
+          format: uuid
+        recipeName:
+          type: string
+          example: "Cơm gà Hải Nam"
+        servings:
+          type: integer
+          description: Số serving được tính
+        perServing:
+          $ref: '#/components/schemas/MacroNutrients'
+        total:
+          $ref: '#/components/schemas/MacroNutrients'
+        breakdown:
+          $ref: '#/components/schemas/MacroBreakdown'
+        ingredients:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngredientNutrition'
+        hasEstimatedData:
+          type: boolean
+          description: true nếu có ít nhất 1 ingredient dùng nutrition ước tính
+
+    MealNutrition:
+      type: object
+      properties:
+        mealType:
+          type: string
+          enum: [breakfast, lunch, dinner]
+        recipes:
+          type: array
+          items:
+            type: object
+            properties:
+              recipeId:
+                type: string
+                format: uuid
+              recipeName:
+                type: string
+              macros:
+                $ref: '#/components/schemas/MacroNutrients'
+        totalMacros:
+          $ref: '#/components/schemas/MacroNutrients'
+        calorieContributionPercent:
+          type: number
+          format: float
+          description: "% calo đóng góp so với tổng ngày"
+
+    DailyNutrition:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        meals:
+          type: array
+          items:
+            $ref: '#/components/schemas/MealNutrition'
+        totalMacros:
+          $ref: '#/components/schemas/MacroNutrients'
+        goals:
+          $ref: '#/components/schemas/NutritionGoals'
+        status:
+          type: object
+          description: Trạng thái so với target cho mỗi macro
+          properties:
+            calories:
+              $ref: '#/components/schemas/MacroStatus'
+            protein:
+              $ref: '#/components/schemas/MacroStatus'
+            carbs:
+              $ref: '#/components/schemas/MacroStatus'
+            fat:
+              $ref: '#/components/schemas/MacroStatus'
+            fiber:
+              $ref: '#/components/schemas/MacroStatus'
+        hasMealPlan:
+          type: boolean
+          description: Có active meal plan cho ngày này không
+
+    MacroStatus:
+      type: object
+      properties:
+        actual:
+          type: number
+          format: float
+        target:
+          type: number
+          format: float
+        percent:
+          type: number
+          format: float
+          description: "% đạt được so với target"
+          example: 95.5
+        status:
+          type: string
+          enum: [good, warning, alert]
+          description: "good: ±10%, warning: ±10-20%, alert: >20%"
+
+    DayNutritionSummary:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        dayLabel:
+          type: string
+          example: "Thứ 2"
+        totalMacros:
+          $ref: '#/components/schemas/MacroNutrients'
+        calorieStatus:
+          type: string
+          enum: [good, warning, alert]
+        hasMealPlan:
+          type: boolean
+
+    WeeklyNutrition:
+      type: object
+      properties:
+        weekStart:
+          type: string
+          format: date
+        weekEnd:
+          type: string
+          format: date
+        days:
+          type: array
+          items:
+            $ref: '#/components/schemas/DayNutritionSummary'
+        averageDailyMacros:
+          $ref: '#/components/schemas/MacroNutrients'
+        goals:
+          $ref: '#/components/schemas/NutritionGoals'
+        daysOnTarget:
+          type: integer
+          description: Số ngày đạt target calo (±10%)
+        daysOverTarget:
+          type: integer
+          description: Số ngày vượt target calo (> 10%)
+        daysUnderTarget:
+          type: integer
+          description: Số ngày thiếu target calo (> 10%)
+
+    NutritionGoals:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        preset:
+          type: string
+          enum: [maintain, weight_loss, muscle_gain, diabetic, custom]
+          description: Preset đang sử dụng
+        dailyCalories:
+          type: integer
+          example: 2000
+        dailyProteinGrams:
+          type: number
+          format: float
+          example: 50
+        dailyCarbGrams:
+          type: number
+          format: float
+          example: 275
+        dailyFatGrams:
+          type: number
+          format: float
+          example: 65
+        dailyFiberGrams:
+          type: number
+          format: float
+          example: 25
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateNutritionGoalsRequest:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+        preset:
+          type: string
+          enum: [maintain, weight_loss, muscle_gain, diabetic, custom]
+          description: Chọn preset hoặc custom. Khi chọn preset, các giá trị bên dưới bị ignore
+        dailyCalories:
+          type: integer
+          minimum: 800
+          maximum: 5000
+          description: Bắt buộc khi preset=custom
+        dailyProteinGrams:
+          type: number
+          format: float
+          minimum: 10
+          maximum: 500
+        dailyCarbGrams:
+          type: number
+          format: float
+          minimum: 20
+          maximum: 800
+        dailyFatGrams:
+          type: number
+          format: float
+          minimum: 10
+          maximum: 300
+        dailyFiberGrams:
+          type: number
+          format: float
+          minimum: 5
+          maximum: 100
+      required:
+        - preset
+
+    RecipeNutritionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RecipeNutrition'
+        error:
+          type: object
+          nullable: true
+
+    DailyNutritionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DailyNutrition'
+        error:
+          type: object
+          nullable: true
+
+    WeeklyNutritionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WeeklyNutrition'
+        error:
+          type: object
+          nullable: true
+
+    NutritionGoalsResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/NutritionGoals'
+        error:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INVALID_NUTRITION_GOALS"
+            message:
+              type: string
+              example: "Calories must be between 800 and 5000"
+            details:
+              type: object

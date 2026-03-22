@@ -1,0 +1,277 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Dietary Filter & Restrictions API
+  description: API cho quản lý chế độ ăn, dị ứng, bệnh lý, tôn giáo, và ingredient blacklist. Dietary filter được áp dụng tự động trong recommendation engine và recipe search.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Dietary Restrictions
+    description: CRUD dietary restrictions cho user/profile
+  - name: Dietary Options
+    description: Master data cho diet types, allergens, medical conditions
+
+paths:
+  /users/{userId}/dietary:
+    get:
+      tags: [Dietary Restrictions]
+      summary: Get dietary restrictions
+      description: Lấy toàn bộ dietary restrictions của user hoặc profile cụ thể
+      operationId: getDietaryRestrictions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Nếu không truyền, lấy dietary của primary profile
+      responses:
+        '200':
+          description: Dietary restrictions của user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DietaryRestrictionsResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden — không có quyền xem dietary của user khác
+        '404':
+          description: User hoặc profile không tồn tại
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Dietary Restrictions]
+      summary: Update dietary restrictions
+      description: Cập nhật toàn bộ dietary restrictions cho user/profile. Thay đổi có hiệu lực ngay cho mọi gợi ý và tìm kiếm tiếp theo.
+      operationId: updateDietaryRestrictions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Nếu không truyền, update dietary của primary profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DietaryRestrictionsUpdate'
+      responses:
+        '200':
+          description: Dietary restrictions đã được cập nhật
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DietaryRestrictionsResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /dietary/options:
+    get:
+      tags: [Dietary Options]
+      summary: List available dietary options
+      description: Lấy danh sách master data cho diet types, allergens, medical conditions, religious diets. Dùng để render UI form dietary settings.
+      operationId: getDietaryOptions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Danh sách dietary options
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DietaryOptionsResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DietaryRestrictions:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        profileId:
+          type: string
+          format: uuid
+        dietType:
+          type: string
+          enum: [normal, lacto_vegetarian, ovo_vegetarian, lacto_ovo_vegetarian, vegan, keto, low_carb, paleo, mediterranean, dash]
+          description: Chế độ ăn. MVP chỉ hỗ trợ 1 chế độ ăn/profile.
+          default: normal
+        allergens:
+          type: array
+          items:
+            type: string
+            enum: [shellfish, fish, peanuts, gluten, dairy, eggs, soy, tree_nuts]
+          description: Danh sách dị ứng thực phẩm (multi-select)
+        medicalConditions:
+          type: array
+          items:
+            type: string
+            enum: [diabetes, hypertension, gout, kidney_disease]
+          description: Bệnh lý (Phase 2 filter logic, master data sẵn từ MVP)
+        religiousDiet:
+          type: string
+          enum: [none, buddhist_lunar, halal, kosher]
+          nullable: true
+          description: "Chế độ ăn theo tôn giáo. buddhist_lunar = chay rằm/mùng 1"
+          default: none
+        ingredientBlacklist:
+          type: array
+          items:
+            type: string
+          description: Danh sách nguyên liệu không muốn ăn (tối đa 50)
+          maxItems: 50
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DietaryRestrictionsUpdate:
+      type: object
+      description: Cập nhật dietary restrictions. Gửi full object (PUT semantics).
+      properties:
+        dietType:
+          type: string
+          enum: [normal, lacto_vegetarian, ovo_vegetarian, lacto_ovo_vegetarian, vegan, keto, low_carb, paleo, mediterranean, dash]
+        allergens:
+          type: array
+          items:
+            type: string
+            enum: [shellfish, fish, peanuts, gluten, dairy, eggs, soy, tree_nuts]
+        medicalConditions:
+          type: array
+          items:
+            type: string
+            enum: [diabetes, hypertension, gout, kidney_disease]
+        religiousDiet:
+          type: string
+          enum: [none, buddhist_lunar, halal, kosher]
+          nullable: true
+        ingredientBlacklist:
+          type: array
+          items:
+            type: string
+          maxItems: 50
+
+    DietaryOption:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Identifier (e.g., "vegan", "shellfish", "diabetes")
+        label:
+          type: string
+          description: Tên hiển thị tiếng Việt
+          example: "Thuần chay (Vegan)"
+        description:
+          type: string
+          description: Mô tả ngắn
+          example: "Không sử dụng bất kỳ sản phẩm động vật nào"
+        category:
+          type: string
+          enum: [diet_type, allergen, medical_condition, religious_diet]
+        iconUrl:
+          type: string
+          format: uri
+          nullable: true
+        phase:
+          type: string
+          enum: [mvp, phase2]
+          description: Giai đoạn hỗ trợ (mvp = filter active, phase2 = master data only)
+
+    DietaryOptions:
+      type: object
+      properties:
+        dietTypes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryOption'
+        allergens:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryOption'
+        medicalConditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryOption'
+        religiousDiets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DietaryOption'
+
+    DietaryRestrictionsResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DietaryRestrictions'
+        error:
+          type: object
+          nullable: true
+
+    DietaryOptionsResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DietaryOptions'
+        error:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

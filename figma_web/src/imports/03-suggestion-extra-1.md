@@ -1,0 +1,110 @@
+# Flow 3 Addendum: S12 Surprise + S13 Quick Cook — SDD
+
+Bổ sung cho `03-suggestion.md` đã có S10 Home và S11 Combo.
+
+---
+
+## S12 — Surprise Suggestion Screen
+
+### Mục đích
+"Hôm nay ăn gì?" — random nhưng phù hợp dietary. Gamification element.
+
+### Layout
+```
+┌──────────────────────────────────┐
+│ ← Surprise Me!           🎲     │
+│──────────────────────────────────│
+│                                  │
+│  ┌──────────────────────────┐   │
+│  │ 🎰 Animation Container   │   │
+│  │                          │   │
+│  │   (slot machine style    │   │
+│  │    spinning → reveal)    │   │
+│  │                          │   │
+│  │   ┌──────────────────┐   │   │
+│  │   │ Recipe Card Full  │   │   │
+│  │   │ (300px image)     │   │   │
+│  │   │  📸 Phở Bò        │   │   │
+│  │   │  ⏱ 45 phút       │   │   │
+│  │   │  🔥 520 kcal      │   │   │
+│  │   │  ⭐ Miền Bắc      │   │   │
+│  │   └──────────────────┘   │   │
+│  │                          │   │
+│  │  "Lý do gợi ý:"         │   │
+│  │  "Món này rất hợp với    │   │
+│  │   khẩu vị miền Bắc      │   │
+│  │   của bạn!"              │   │
+│  └──────────────────────────┘   │
+│                                  │
+│  ┌──────┐ ┌──────┐ ┌──────┐    │
+│  │ Nấu  │ │ Lưu  │ │ Khác │    │
+│  │ ngay │ │  ♥   │ │  🎲  │    │
+│  └──────┘ └──────┘ └──────┘    │
+│                                  │
+└──────────────────────────────────┘
+```
+
+### Behavior
+1. Mở → animation "spinning" 1.5s
+2. Reveal recipe card with bounce animation
+3. Buttons:
+   - "Nấu ngay" → RecipeDetail (S15) với cooking mode prompt
+   - "Lưu ♥" → bookmark + toast
+   - "Khác 🎲" → re-spin animation → new recipe (count limit)
+4. Daily limit: Free = 5, Pro = unlimited
+5. Analytics: track `view`, `accept`, `skip`
+
+### Animation Detail
+- Phase 1: Cards flying/rotating (300ms)
+- Phase 2: Slow down, focus on 1 card (500ms)
+- Phase 3: Card zooms to full (300ms)
+- Total: ~1.1s
+
+---
+
+## S13 — Quick Cook Screen (< 15 phút)
+
+### Mục đích
+Bận? Chỉ cần 1 filter: cookTime ≤ 15 phút. Curated experience.
+
+### Layout
+```
+┌──────────────────────────────────┐
+│ ← Nấu nhanh               ⚡    │
+│──────────────────────────────────│
+│                                  │
+│  ⏱ Chỉ dưới 15 phút            │
+│  text-h3, neutral-600           │
+│                                  │
+│  ┌─ Filter Chips ───────────┐   │
+│  │ [Sáng] [Trưa] [Tối]     │   │
+│  │ [Chay ✓] [Low-carb]     │   │
+│  └──────────────────────────┘   │
+│                                  │
+│  ── Gợi ý cho bạn ─────────    │
+│                                  │
+│  ┌────────┐ ┌────────┐         │
+│  │ Recipe │ │ Recipe │         │
+│  │ Card   │ │ Card   │         │
+│  │ md     │ │ md     │         │
+│  └────────┘ └────────┘         │
+│  ┌────────┐ ┌────────┐         │
+│  │ Recipe │ │ Recipe │         │
+│  │ Card   │ │ Card   │         │
+│  └────────┘ └────────┘         │
+│                                  │
+│  [ Xem thêm → ]                │
+│                                  │
+└──────────────────────────────────┘
+```
+
+### API
+```
+GET /api/v1/recipes?maxCookTime=15&mealType={current}&pageSize=10
+```
+
+### Behavior
+- Auto-detect meal type from current hour
+- Filter chips toggleable
+- Recipe cards tap → RecipeDetail (S15)
+- Infinite scroll hoặc "Xem thêm"

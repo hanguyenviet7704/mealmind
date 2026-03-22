@@ -1,0 +1,74 @@
+# Shopping List API — Placeholder (Phase 2)
+# Chi tiet se duoc bo sung truoc khi implement.
+
+openapi: 3.0.3
+info:
+  title: Shopping List API
+  version: 0.0.1
+  description: "Phase 2 placeholder — chua implement."
+
+paths:
+  /api/v1/shopping-lists/generate:
+    post:
+      summary: Generate shopping list from meal plan
+      operationId: generateShoppingList
+      tags: [shopping-list]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mealPlanId:
+                  type: string
+                  format: uuid
+      responses:
+        "201":
+          description: Shopping list created
+
+  /api/v1/shopping-lists/{id}:
+    get:
+      summary: Get shopping list by ID
+      operationId: getShoppingList
+      tags: [shopping-list]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Shopping list details
+
+  /api/v1/shopping-lists/{id}/items/{itemId}:
+    patch:
+      summary: Check off / update a shopping list item
+      operationId: updateShoppingListItem
+      tags: [shopping-list]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                checked:
+                  type: boolean
+      responses:
+        "200":
+          description: Item updated

@@ -1,0 +1,556 @@
+openapi: 3.0.3
+info:
+  title: MealMind - Smart Meal Suggestion API
+  description: API cho tính năng gợi ý món ăn thông minh bằng AI
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: Suggestions
+    description: Gợi ý món ăn AI
+  - name: Interactions
+    description: Ghi lại tương tác user với gợi ý
+
+paths:
+  /suggestions:
+    get:
+      tags: [Suggestions]
+      summary: Get meal suggestions
+      description: Lấy 3-5 gợi ý món ăn dựa trên profile, context, và lịch sử
+      operationId: getSuggestions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+          description: Loại bữa ăn. Nếu không truyền, tự detect theo thời gian
+        - name: count
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+          description: Số lượng gợi ý muốn nhận
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Profile ID. Nếu không truyền, dùng active profile
+        - name: latitude
+          in: query
+          schema:
+            type: number
+            format: float
+          description: Vĩ độ (cho weather context)
+        - name: longitude
+          in: query
+          schema:
+            type: number
+            format: float
+          description: Kinh độ (cho weather context)
+      responses:
+        '200':
+          description: Danh sách gợi ý món ăn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionListResponse'
+        '401':
+          description: Unauthorized
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /suggestions/surprise:
+    get:
+      tags: [Suggestions]
+      summary: Get surprise suggestion
+      description: '"Surprise me" — gợi ý món ngẫu nhiên chưa từng thử'
+      operationId: getSurpriseSuggestion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Surprise suggestion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionResponse'
+
+  /suggestions/combo:
+    get:
+      tags: [Suggestions]
+      summary: Get complete meal combo suggestion
+      description: Gợi ý combo bữa ăn hoàn chỉnh (món chính + canh + rau + tráng miệng)
+      operationId: getComboSuggestion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mealType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [breakfast, lunch, dinner]
+        - name: servings
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 2
+        - name: profileId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Meal combo suggestion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComboSuggestionResponse'
+
+  /suggestions/combo/swap:
+    post:
+      tags: [Suggestions]
+      summary: Swap one item in a combo
+      description: Thay thế 1 món trong combo, giữ nguyên cân bằng dinh dưỡng
+      operationId: swapComboItem
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComboSwapRequest'
+      responses:
+        '200':
+          description: Updated combo with swapped item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComboSuggestionResponse'
+
+  /suggestions/refresh:
+    post:
+      tags: [Suggestions]
+      summary: Refresh suggestions
+      description: Lấy batch gợi ý mới, exclude các món đã hiển thị
+      operationId: refreshSuggestions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mealType:
+                  type: string
+                  enum: [breakfast, lunch, dinner, snack]
+                excludeRecipeIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Danh sách recipe IDs đã hiển thị, cần loại trừ
+                count:
+                  type: integer
+                  default: 5
+      responses:
+        '200':
+          description: New batch of suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionListResponse'
+
+  /suggestions/context:
+    get:
+      tags: [Suggestions]
+      summary: Get current context data
+      description: Lấy thông tin ngữ cảnh hiện tại (thời tiết, mùa, ngày) dùng để debug/display
+      operationId: getContext
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: latitude
+          in: query
+          schema:
+            type: number
+            format: float
+        - name: longitude
+          in: query
+          schema:
+            type: number
+            format: float
+      responses:
+        '200':
+          description: Current context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextResponse'
+
+  /interactions:
+    post:
+      tags: [Interactions]
+      summary: Record user interactions
+      description: Ghi lại batch tương tác của user (view, skip, save, cook)
+      operationId: recordInteractions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InteractionBatch'
+      responses:
+        '202':
+          description: Interactions accepted for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accepted:
+                        type: integer
+                        description: Số interactions đã nhận
+
+  /interactions/history:
+    get:
+      tags: [Interactions]
+      summary: Get interaction history
+      description: Lấy lịch sử tương tác gần đây
+      operationId: getInteractionHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+            maximum: 30
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [view, skip, save, cook]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Interaction history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InteractionHistoryResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SuggestionCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Suggestion ID (dùng cho tracking)
+        recipe:
+          $ref: '#/components/schemas/RecipeSummary'
+        score:
+          type: number
+          format: float
+          description: Relevance score (0-1)
+        reason:
+          type: string
+          description: Giải thích lý do gợi ý
+          example: "Phù hợp khẩu vị miền Bắc, món nhanh cho ngày bận"
+        reasonType:
+          type: string
+          enum: [taste_match, context_match, diversity, popular, surprise]
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["Nhanh gọn", "Miền Bắc", "< 30 phút"]
+
+    RecipeSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Phở bò Hà Nội"
+        imageUrl:
+          type: string
+          format: uri
+        cookTime:
+          type: integer
+          description: Thời gian nấu (phút)
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        calories:
+          type: integer
+          description: Calo per serving
+        cuisine:
+          type: string
+          example: "Miền Bắc"
+        mealTypes:
+          type: array
+          items:
+            type: string
+            enum: [breakfast, lunch, dinner, snack]
+
+    ComboItem:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [main, soup, vegetable, dessert, side]
+          description: Vai trò trong combo
+        recipe:
+          $ref: '#/components/schemas/RecipeSummary'
+
+    ComboSuggestion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        mealType:
+          type: string
+          enum: [breakfast, lunch, dinner]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComboItem'
+        totalCalories:
+          type: integer
+        totalProtein:
+          type: number
+          format: float
+        totalCarbs:
+          type: number
+          format: float
+        totalFat:
+          type: number
+          format: float
+        servings:
+          type: integer
+
+    ComboSwapRequest:
+      type: object
+      required:
+        - comboId
+        - role
+      properties:
+        comboId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [main, soup, vegetable, dessert, side]
+          description: Vai trò của món cần swap
+        excludeRecipeId:
+          type: string
+          format: uuid
+          description: Recipe ID hiện tại cần thay thế
+
+    ContextData:
+      type: object
+      properties:
+        currentMealType:
+          type: string
+          enum: [breakfast, lunch, dinner, snack]
+        weather:
+          type: object
+          properties:
+            temperature:
+              type: number
+              description: Nhiệt độ (°C)
+            condition:
+              type: string
+              enum: [hot, warm, cool, cold, rainy]
+            available:
+              type: boolean
+              description: Weather API có available không
+        season:
+          type: string
+          enum: [spring, summer, autumn, winter]
+        dayOfWeek:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        isWeekend:
+          type: boolean
+        timeOfDay:
+          type: string
+          format: time
+
+    Interaction:
+      type: object
+      required:
+        - recipeId
+        - action
+      properties:
+        recipeId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [view, skip, save, cook]
+        suggestionId:
+          type: string
+          format: uuid
+          description: ID của suggestion card (để track conversion)
+        context:
+          type: object
+          properties:
+            mealType:
+              type: string
+            source:
+              type: string
+              enum: [home, search, combo, surprise, meal_plan]
+        timestamp:
+          type: string
+          format: date-time
+
+    InteractionBatch:
+      type: object
+      required:
+        - interactions
+      properties:
+        interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Interaction'
+          minItems: 1
+          maxItems: 50
+
+    SuggestionListResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            suggestions:
+              type: array
+              items:
+                $ref: '#/components/schemas/SuggestionCard'
+            context:
+              $ref: '#/components/schemas/ContextData'
+            remaining:
+              type: integer
+              description: Số gợi ý còn lại trong quota ngày (Free tier)
+        error:
+          type: object
+          nullable: true
+
+    SuggestionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SuggestionCard'
+        error:
+          type: object
+          nullable: true
+
+    ComboSuggestionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ComboSuggestion'
+        error:
+          type: object
+          nullable: true
+
+    ContextResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ContextData'
+        error:
+          type: object
+          nullable: true
+
+    InteractionHistoryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Interaction'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+        error:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          nullable: true
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object

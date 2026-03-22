@@ -1,0 +1,10 @@
+{
+  "name": "@mealmind/types",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'No build step yet'",
+    "lint": "echo 'No lint step yet'",
+    "test": "echo 'No test step yet'"
+  }
+}

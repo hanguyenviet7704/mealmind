@@ -1,0 +1,31 @@
+export class PaginationDto {
+  page: number = 1;
+  pageSize: number = 20;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  meta: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export function paginate<T>(
+  data: T[],
+  total: number,
+  page: number,
+  pageSize: number,
+): PaginatedResult<T> {
+  return {
+    data,
+    meta: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}

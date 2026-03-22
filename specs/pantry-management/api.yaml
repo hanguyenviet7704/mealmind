@@ -1,0 +1,88 @@
+# Pantry Management API — Placeholder (Phase 2)
+# Chi tiet se duoc bo sung truoc khi implement.
+
+openapi: 3.0.3
+info:
+  title: Pantry Management API
+  version: 0.0.1
+  description: "Phase 2 placeholder — chua implement."
+
+paths:
+  /api/v1/pantry:
+    get:
+      summary: List pantry items
+      operationId: listPantryItems
+      tags: [pantry]
+      responses:
+        "200":
+          description: List of pantry items
+
+    post:
+      summary: Add item to pantry
+      operationId: addPantryItem
+      tags: [pantry]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                quantity:
+                  type: number
+                unit:
+                  type: string
+                expiryDate:
+                  type: string
+                  format: date
+      responses:
+        "201":
+          description: Item added
+
+  /api/v1/pantry/{id}:
+    delete:
+      summary: Remove item from pantry
+      operationId: removePantryItem
+      tags: [pantry]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Item removed
+
+  /api/v1/pantry/scan:
+    post:
+      summary: Scan barcode or image to identify ingredient
+      operationId: scanPantryItem
+      tags: [pantry]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                barcode:
+                  type: string
+      responses:
+        "200":
+          description: Recognized ingredient(s)
+
+  /api/v1/pantry/suggestions:
+    get:
+      summary: Get recipe suggestions based on current pantry items
+      operationId: getPantrySuggestions
+      tags: [pantry]
+      responses:
+        "200":
+          description: List of suggested recipes

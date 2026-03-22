@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mealmind-mysql
+    restart: unless-stopped
+    ports:
+      - '33061:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mealmind
+      MYSQL_USER: mealmind
+      MYSQL_PASSWORD: mealmind
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mealmind-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: mealmind-meilisearch
+    restart: unless-stopped
+    ports:
+      - '7700:7700'
+    environment:
+      MEILI_MASTER_KEY: mealmind-dev-key
+      MEILI_NO_ANALYTICS: true
+    volumes:
+      - meilisearch_data:/meili_data
+
+  # --- Backend API (NestJS) ---
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: mealmind-api
+    ports:
+      - '3001:4000'
+    environment:
+      - PORT=4000
+      - DATABASE_URL=mysql://mealmind:mealmind@mysql:3306/mealmind
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MEILISEARCH_HOST=http://meilisearch:7700
+      - MEILISEARCH_API_KEY=masterKey
+      - JWT_ACCESS_SECRET=dev-access-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - RECOMMENDATION_SERVICE_URL=http://recommendation:8000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+
+  # --- Frontend Web (Next.js) ---
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+    container_name: mealmind-web
+    ports:
+      - '3000:3000'
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+    depends_on:
+      - api
+
+  # --- AI Recommendation Service (FastAPI) ---
+  recommendation:
+    build:
+      context: services/recommendation
+      dockerfile: Dockerfile
+    container_name: mealmind-recommendation
+    ports:
+      - '8001:8000'
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - api
+
+volumes:
+  mysql_data:
+  redis_data:
+  meilisearch_data:
