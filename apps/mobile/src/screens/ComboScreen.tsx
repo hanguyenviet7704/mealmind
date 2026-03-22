@@ -19,7 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { HomeStackParamList } from '../navigation/types';
 import { colors } from '../theme/colors';
-import { suggestionsApi, ComboSuggestion, ComboItem } from '../lib/api/suggestions';
+import { suggestionsApi, ComboSuggestion, ComboItem, RecipeSummary } from '../lib/api/suggestions';
 import { ApiError } from '../lib/api/client';
 
 type NavigationProp = NativeStackNavigationProp<HomeStackParamList>;
@@ -52,6 +52,8 @@ export function ComboScreen() {
 
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapForItem, setSwapForItem] = useState<ComboItem | null>(null);
+  const [alternatives, setAlternatives] = useState<RecipeSummary[]>([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -92,27 +94,40 @@ export function ComboScreen() {
     fetchCombo();
   }, [fetchCombo]);
 
-  const openSwap = (item: ComboItem) => {
+  const openSwap = async (item: ComboItem) => {
     setSwapForItem(item);
     setShowSwapModal(true);
-  };
-
-  const handleSwap = useCallback(async () => {
-    if (!combo || !swapForItem) return;
-    setShowSwapModal(false);
-    setSwappingRole(swapForItem.role);
+    setLoadingAlternatives(true);
+    
     try {
-      const res = await suggestionsApi.swapComboItem(combo.id, swapForItem.role, swapForItem.recipe.id);
-      setCombo(res.data);
+      const res = await suggestionsApi.swapComboItem(item.role, mealType, combo?.items.map(i => i.recipe.id) || []);
+      setAlternatives(res.data);
     } catch (error) {
       if (error instanceof ApiError) {
-        Alert.alert('Không thể đổi món', error.message);
+        Alert.alert('Lỗi', error.message);
       } else {
-        Alert.alert('Không thể đổi món', 'Đã xảy ra lỗi. Vui lòng thử lại.');
+        Alert.alert('Lỗi', 'Không thể tải món thay thế.');
       }
+      setShowSwapModal(false);
     } finally {
-      setSwappingRole(null);
+      setLoadingAlternatives(false);
     }
+  };
+
+  const handleSwap = useCallback((newRecipe: RecipeSummary) => {
+    if (!combo || !swapForItem) return;
+    
+    // Optimistic local update
+    setCombo(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        totalCalories: prev.totalCalories - swapForItem.recipe.calories + newRecipe.calories,
+        items: prev.items.map(item => item.role === swapForItem.role ? { ...item, recipe: newRecipe } : item)
+      };
+    });
+    
+    setShowSwapModal(false);
   }, [combo, swapForItem]);
 
   const headerTitle = `Combo bữa ${MEAL_TYPE_LABELS[mealType].toLowerCase()}`;
@@ -281,22 +296,35 @@ export function ComboScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Confirm swap */}
+            {/* Alternatives list */}
             <View style={styles.sheetBody}>
-              {swapForItem ? (
-                <View style={styles.swapConfirmContainer}>
-                  <Text style={styles.swapConfirmText}>
-                    Đổi "{swapForItem.recipe.name}" bằng món khác?
-                  </Text>
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.swapConfirmBtn}
-                    onPress={handleSwap}
-                  >
-                    <Text style={styles.swapConfirmBtnText}>Đổi ngay</Text>
-                  </TouchableOpacity>
+              {loadingAlternatives ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={{ marginTop: 8, color: colors.neutral500 }}>Đang tìm món thay thế...</Text>
                 </View>
-              ) : null}
+              ) : alternatives.length > 0 ? (
+                alternatives.map((alt, idx) => (
+                  <View key={alt.id} style={styles.altCardRow}>
+                    <Image source={{ uri: alt.imageUrl }} style={styles.altImg} />
+                    <View style={styles.altInfo}>
+                      <Text style={styles.altName}>{alt.name}</Text>
+                      <Text style={styles.altMeta}>⏱ {alt.cookTime}p  ·  🔥 {alt.calories}kcal</Text>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => handleSwap(alt)}
+                      style={styles.altBtn}
+                    >
+                      <Text style={styles.altBtnText}>Chọn</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text style={{ textAlign: 'center', color: colors.neutral500, padding: 20 }}>
+                  Không tìm thấy lựa chọn thay thế phù hợp.
+                </Text>
+              )}
             </View>
           </Animated.View>
         </View>
@@ -623,5 +651,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: colors.white,
+  },
+  altCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  altImg: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+  },
+  altInfo: {
+    flex: 1,
+  },
+  altName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.neutral900,
+    marginBottom: 4,
+  },
+  altMeta: {
+    fontSize: 12,
+    color: colors.neutral500,
+  },
+  altBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.orange50,
+    borderRadius: 12,
+  },
+  altBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

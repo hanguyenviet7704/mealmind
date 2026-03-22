@@ -135,15 +135,17 @@ enum NutritionPreset {
 model User {
   id                   String           @id @default(uuid()) @db.VarChar(255)
   email                String           @unique @db.VarChar(255)
-  passwordHash         String?          @map("password_hash") @db.VarChar(255) // null cho OAuth-only users
+  passwordHash         String?          @map("password_hash") @db.VarChar(255)
   name                 String           @db.VarChar(100)
   avatarUrl            String?          @map("avatar_url") @db.VarChar(500)
   subscriptionTier     SubscriptionTier @default(free) @map("subscription_tier")
-  activeProfileId      String?          @map("active_profile_id") @db.VarChar(255) // null = family mode
+  activeProfileId      String?          @map("active_profile_id") @db.VarChar(255)
   onboardingCompleted  Boolean          @default(false) @map("onboarding_completed")
   googleId             String?          @unique @map("google_id") @db.VarChar(255)
   appleId              String?          @unique @map("apple_id") @db.VarChar(255)
-  deletedAt            DateTime?        @map("deleted_at") @db.DateTime(3) // soft delete
+  loginAttempts        Int              @default(0) @map("login_attempts") @db.SmallInt
+  loginLockedUntil     DateTime?        @map("login_locked_until") @db.DateTime(3)
+  deletedAt            DateTime?        @map("deleted_at") @db.DateTime(3)
   createdAt            DateTime         @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt            DateTime         @updatedAt @map("updated_at") @db.DateTime(3)
 
@@ -155,6 +157,8 @@ model User {
   mealPlans              MealPlan[]
   bookmarks              Bookmark[]
   refreshTokens          RefreshToken[]
+  passwordResetTokens    PasswordResetToken[]
+  quizProgress           QuizProgress?
   nutritionGoals         NutritionGoal[]
   ownedShares            MealPlanShare[]        @relation("ShareOwner")
   receivedShares         MealPlanShare[]        @relation("ShareReceiver")
@@ -181,6 +185,32 @@ model RefreshToken {
   @@index([tokenHash])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.VarChar(255)
+  userId    String    @map("user_id") @db.VarChar(255)
+  tokenHash String    @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.DateTime(3)
+  usedAt    DateTime? @map("used_at") @db.DateTime(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model QuizProgress {
+  userId         String   @id @map("user_id") @db.VarChar(255)
+  completedSteps Json     @default("[]") @map("completed_steps")
+  partialData    Json     @default("{}") @map("partial_data")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_progress")
 }
 
 // ============================================================

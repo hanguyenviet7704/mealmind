@@ -67,11 +67,11 @@ export const suggestionsApi = {
       `/suggestions/combo?mealType=${mealType}&servings=${servings}`,
     ),
 
-  swapComboItem: (comboId: string, role: string, excludeRecipeId?: string) =>
-    api.post<{ data: ComboSuggestion }>('/suggestions/combo/swap', {
-      comboId,
+  swapComboItem: (role: string, mealType: string, excludeIds: string[]) =>
+    api.post<{ data: RecipeSummary[] }>('/suggestions/combo/swap', {
       role,
-      excludeRecipeId,
+      mealType,
+      excludeIds,
     }),
 
   refreshSuggestions: (params: {

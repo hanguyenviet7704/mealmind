@@ -60,22 +60,34 @@ export class OnboardingService {
     return profile;
   }
 
-  async getQuizProgress(_userId: string) {
+  async getQuizProgress(userId: string) {
+    const progress = await this.prisma.quizProgress.findUnique({ where: { userId } });
+    const completedSteps = (progress?.completedSteps as number[]) || [];
+    const currentStep = completedSteps.length > 0 ? Math.max(...completedSteps) + 1 : 1;
     return {
-      completedSteps: [],
+      completedSteps,
       totalSteps: 5,
-      currentStep: 1,
-      partialData: {},
+      currentStep: Math.min(currentStep, 5),
+      partialData: (progress?.partialData as Record<string, unknown>) || {},
     };
   }
 
-  async saveQuizStep(_userId: string, _step: number, _data: Record<string, unknown>) {
-    return {
-      completedSteps: [],
-      totalSteps: 5,
-      currentStep: 1,
-      partialData: {},
+  async saveQuizStep(userId: string, step: number, data: Record<string, unknown>) {
+    const existing = await this.prisma.quizProgress.findUnique({ where: { userId } });
+    const completedSteps: number[] = existing?.completedSteps
+      ? [...new Set([...(existing.completedSteps as number[]), step])]
+      : [step];
+    const partialData: Record<string, unknown> = {
+      ...((existing?.partialData as Record<string, unknown>) || {}),
+      ...data,
     };
+    await this.prisma.quizProgress.upsert({
+      where: { userId },
+      create: { userId, completedSteps, partialData },
+      update: { completedSteps, partialData },
+    });
+    const currentStep = Math.min(Math.max(...completedSteps) + 1, 5);
+    return { completedSteps, totalSteps: 5, currentStep, partialData };
   }
 
   async skipQuiz(userId: string) {
