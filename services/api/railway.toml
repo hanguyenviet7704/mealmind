@@ -6,7 +6,6 @@ builder = "DOCKERFILE"
 dockerfilePath = "services/api/Dockerfile"
 
 [deploy]
-startCommand = "cd /app/services/api && npx prisma migrate deploy && node dist/main"
 healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
