@@ -43,9 +43,19 @@ export class SuggestionsController {
   @Post('combo/swap')
   async swapComboItem(
     @CurrentUser('sub') userId: string,
-    @Body() body: { recipeId: string; excludeIds: string[] },
+    @Body() body: { role: string; mealType: string; excludeIds: string[] },
   ) {
-    return this.suggestionsService.swapComboItem(userId, body.recipeId, body.excludeIds);
+    const rawAlternatives = await this.suggestionsService.swapAlternatives(userId, body.role, body.mealType, body.excludeIds || []);
+    return rawAlternatives.map(r => ({
+      id: r.id,
+      name: r.name,
+      imageUrl: r.imageUrl,
+      cookTime: r.cookTime,
+      difficulty: r.difficulty,
+      calories: r.nutritionInfo ? Number(r.nutritionInfo.calories) : 0,
+      cuisine: r.cuisine,
+      mealTypes: r.mealTypes,
+    }));
   }
 
   // MS-016

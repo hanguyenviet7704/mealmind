@@ -114,18 +114,43 @@ export class SuggestionsService {
     }
   }
 
-  // MS-015: Swap combo item
-  async swapComboItem(userId: string, recipeId: string, excludeIds: string[]) {
-    const recipe = await this.prisma.recipe.findFirst({
-      where: {
-        id: { notIn: [...excludeIds, recipeId] },
-        isPublished: true,
-      },
+  // MS-015: Get swap alternatives for a combo item role
+  async swapAlternatives(userId: string, role: string, mealType: string, excludeIds: string[]) {
+    let whereClause: any = {
+      id: { notIn: excludeIds },
+      isPublished: true,
+      mealTypes: { array_contains: mealType },
+    };
+
+    if (role === 'soup') {
+      whereClause.name = { contains: 'canh' };
+    } else if (role === 'main') {
+      whereClause.calories = { gt: 300 };
+    } else if (role === 'vegetable') {
+      whereClause.name = { contains: 'rau' };
+    } else if (role === 'dessert') {
+      whereClause.name = { contains: 'tráng miệng' };
+    }
+
+    const recipes = await this.prisma.recipe.findMany({
+      where: whereClause,
+      take: 3,
       orderBy: { popularityScore: 'desc' },
       include: { nutritionInfo: true },
     });
 
-    return recipe;
+    // If less than 3, fallback without strict filters
+    if (recipes.length < 3) {
+      const more = await this.prisma.recipe.findMany({
+        where: { id: { notIn: [...excludeIds, ...recipes.map(r => r.id)] }, isPublished: true },
+        take: 3 - recipes.length,
+        orderBy: { popularityScore: 'desc' },
+        include: { nutritionInfo: true },
+      });
+      recipes.push(...more);
+    }
+
+    return recipes;
   }
 
   // MS-016: Refresh suggestions
