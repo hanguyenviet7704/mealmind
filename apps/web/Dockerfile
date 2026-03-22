@@ -19,4 +19,4 @@ RUN pnpm --filter=@mealmind/app-web build
 EXPOSE 3000
 
 # Start the application
-CMD ["pnpm", "--filter=@mealmind/app-web", "start"]
+CMD ["sh", "-c", "cd /app/apps/web && node ../../node_modules/.bin/next start -p ${PORT:-3000}"]
