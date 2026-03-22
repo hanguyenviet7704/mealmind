@@ -1,59 +1,11 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Injectable } from '@nestjs/common';
 
+// Redis removed — all operations are no-ops
 @Injectable()
-export class RedisService implements OnModuleDestroy {
-  private readonly client: Redis;
-
-  constructor(private configService: ConfigService) {
-    const redisUrl = this.configService.get<string>('REDIS_URL');
-    if (redisUrl) {
-      // Railway / production: REDIS_URL=redis://default:password@host:port
-      this.client = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
-    } else {
-      // Local dev: individual REDIS_HOST / REDIS_PORT
-      this.client = new Redis({
-        host: this.configService.get('REDIS_HOST', 'localhost'),
-        port: this.configService.get<number>('REDIS_PORT', 6379),
-        password: this.configService.get('REDIS_PASSWORD', undefined),
-        db: this.configService.get<number>('REDIS_DB', 0),
-        maxRetriesPerRequest: 3,
-      });
-    }
-  }
-
-  getClient(): Redis {
-    return this.client;
-  }
-
-  async get(key: string): Promise<string | null> {
-    return this.client.get(key);
-  }
-
-  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    if (ttlSeconds) {
-      await this.client.set(key, value, 'EX', ttlSeconds);
-    } else {
-      await this.client.set(key, value);
-    }
-  }
-
-  async del(key: string): Promise<void> {
-    await this.client.del(key);
-  }
-
-  async getJson<T>(key: string): Promise<T | null> {
-    const val = await this.client.get(key);
-    if (!val) return null;
-    return JSON.parse(val) as T;
-  }
-
-  async setJson<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
-    await this.set(key, JSON.stringify(value), ttlSeconds);
-  }
-
-  async onModuleDestroy() {
-    await this.client.quit();
-  }
+export class RedisService {
+  async get(_key: string): Promise<string | null> { return null; }
+  async set(_key: string, _value: string, _ttl?: number): Promise<void> {}
+  async del(_key: string): Promise<void> {}
+  async getJson<T>(_key: string): Promise<T | null> { return null; }
+  async setJson<T>(_key: string, _value: T, _ttl?: number): Promise<void> {}
 }
