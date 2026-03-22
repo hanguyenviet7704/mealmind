@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -15,6 +15,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let errorCode = 'SERVER_INTERNAL';
@@ -37,13 +38,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     // Logging
+    const reqMethod = request.method;
+    const reqUrl = request.originalUrl || request.url;
+    const reqQuery = Object.keys(request.query || {}).length ? `\n    Query: ${JSON.stringify(request.query)}` : '';
+    const reqBody = Object.keys(request.body || {}).length ? `\n    Body: ${JSON.stringify(request.body)}` : '';
+    const reqLog = `\n    Route: ${reqMethod} ${reqUrl}${reqQuery}${reqBody}`;
+
     if (status >= 500) {
       this.logger.error(
-        `${status} ${errorCode}: ${message}`,
+        `${status} ${errorCode}: ${message}${reqLog}`,
         exception instanceof Error ? exception.stack : undefined,
       );
     } else if (status >= 400) {
-      this.logger.warn(`${status} ${errorCode}: ${message}`);
+      this.logger.warn(`${status} ${errorCode}: ${message}${reqLog}`);
     }
 
     response.status(status).json({
