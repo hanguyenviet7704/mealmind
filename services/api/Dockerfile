@@ -14,7 +14,7 @@ RUN pnpm --filter=@mealmind/service-api prisma:generate
 # Build the API
 RUN pnpm --filter=@mealmind/service-api build
 
-EXPOSE 3001
+EXPOSE 4000
 
-# Start the application
-CMD ["pnpm", "--filter=@mealmind/service-api", "start"]
+# Run DB migrations then start the server
+CMD ["sh", "-c", "cd /app/services/api && npx prisma migrate deploy && node dist/main"]

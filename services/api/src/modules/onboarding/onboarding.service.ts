@@ -361,12 +361,13 @@ export class OnboardingService {
     });
 
     if (existing) {
+      // MySQL JSON field — no native push; merge manually
+      const current = Array.isArray(existing.customBlacklist) ? existing.customBlacklist as string[] : [];
+      const childItems = ['đồ sống', 'cà phê', 'trà đặc', 'bia', 'rượu'];
       await this.prisma.dietaryRestriction.update({
         where: { id: existing.id },
         data: {
-          customBlacklist: {
-            push: ['đồ sống', 'cà phê', 'trà đặc', 'bia', 'rượu'],
-          },
+          customBlacklist: [...new Set([...current, ...childItems])],
         },
       });
     } else {
