@@ -1,17 +1,18 @@
 import { Controller, Get, Post, Delete, Param, Query, UseGuards } from '@nestjs/common';
 import { RecipesService } from './recipes.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { RecipesFilterDto, BookmarkFilterDto, GenerateComboDto } from './dto/recipes.dto';
 import { PaginationDto } from '@/common/dto/pagination.dto';
 
 @ApiTags('recipes')
-@ApiBearerAuth()
 @Controller('recipes')
-@UseGuards(JwtAuthGuard)
 export class RecipesController {
   constructor(private recipesService: RecipesService) { }
+
+  // ───── PUBLIC ENDPOINTS (không cần đăng nhập) ─────
 
   @Get()
   @ApiOperation({ summary: 'Danh sách công thức', description: 'Lấy danh sách các công thức kèm bộ lọc ẩm thực, độ khó, v.v.' })
@@ -55,7 +56,11 @@ export class RecipesController {
     return this.recipesService.getAiCombo(query.servings ?? 2);
   }
 
+  // ───── AUTHENTICATED ENDPOINTS (cần đăng nhập) ─────
+
   @Get('bookmarks')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Danh sách công thức đã lưu', description: 'Lấy danh sách công thức do user hiện tại bookmark.' })
   async getBookmarks(
     @CurrentUser('sub') userId: string,
@@ -71,6 +76,8 @@ export class RecipesController {
   }
 
   @Post(':recipeId/bookmark')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Lưu công thức', description: 'Đánh dấu công thức vào danh sách tham khảo cá nhân.' })
   @ApiParam({ name: 'recipeId', description: 'ID của công thức cần lưu' })
   async bookmark(
@@ -81,6 +88,8 @@ export class RecipesController {
   }
 
   @Delete(':recipeId/bookmark')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Bỏ lưu công thức', description: 'Xóa công thức khỏi danh sách bookmark.' })
   @ApiParam({ name: 'recipeId', description: 'ID công thức' })
   async unbookmark(
@@ -90,7 +99,10 @@ export class RecipesController {
     return this.recipesService.removeBookmark(userId, recipeId);
   }
 
+  // ───── SEMI-PUBLIC (có thể dùng không cần auth, nhưng nếu có auth sẽ hiển thị bookmark status) ─────
+
   @Get(':recipeId')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Chi tiết công thức', description: 'Xem chi tiết hướng dẫn nấu 1 công thức.' })
   @ApiParam({ name: 'recipeId', description: 'ID công thức' })
   @ApiQuery({ name: 'servings', required: false, description: 'Cập nhật lại định lượng nguyên liệu theo khẩu phần' })
